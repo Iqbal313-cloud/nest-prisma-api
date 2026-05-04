@@ -1,0 +1,133 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id           Int        @id @default(autoincrement())
+  categoryName String?
+  description  String?
+
+  parentId Int?
+  parent   Category? @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id          Int      @id @default(autoincrement())
+  firstName   String?
+  lastName    String?
+  phoneNumber String?
+  address     String?
+
+  orders Orders[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Employee {
+  id        Int      @id @default(autoincrement())
+  firstName String
+  lastName  String
+  birthDate DateTime?
+  photoPath String?
+  notes     String?
+
+  orders Orders[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Supplier {
+  id           Int     @id @default(autoincrement())
+  supplierName String?
+  contactName  String?
+  address      String?
+  city         String?
+  postalCode   String?
+  country      String?
+  phone        String?
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id              Int      @id @default(autoincrement())
+  productName     String
+  quantityPerUnit String?
+  unitPrice       Decimal?
+  unitsInStock    Int?
+  unitsOnOrder    Int?
+  discontinued    Boolean?
+
+  supplierId Int?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
+  categoryId Int?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  orderDetails OrderDetails[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Orders {
+  id          Int          @id @default(autoincrement())
+  orderDate   DateTime?
+  orderStatus OrderStatus  @default(PENDING)
+
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  employeeId Int?
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+
+  orderDetails OrderDetails[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrderDetails {
+  id        Int     @id @default(autoincrement())
+  quantity  Int
+  unitPrice Decimal
+  discount  Decimal
+
+  orderId   Int
+  orders    Orders  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
