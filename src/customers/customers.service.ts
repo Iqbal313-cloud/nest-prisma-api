@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PaginationDto } from './dto/pagination.dto';
-import { CreateUpdateCustomerDto } from './dto/createupdate-customer.dto';
+import { CreateCustomerDto } from './dto/create-customer.dto';
+import { UpdateCustomerDto } from './dto/update-customer.dto';
 
 @Injectable()
 export class CustomerService {
@@ -59,7 +60,7 @@ export class CustomerService {
     return customer;
   }
 
-  async create(createCustomerDto: CreateUpdateCustomerDto) {
+  async create(createCustomerDto: CreateCustomerDto) {
     const customer = await this.prisma.customer.create({
       data: {
         ...createCustomerDto,
@@ -69,7 +70,7 @@ export class CustomerService {
     return customer;
   }
 
-  async update(id: number, updateCustomerDto: CreateUpdateCustomerDto) {
+  async update(id: number, updateCustomerDto: UpdateCustomerDto) {
     const existingCustomer = await this.prisma.customer.findUnique({
       where: { id },
     });

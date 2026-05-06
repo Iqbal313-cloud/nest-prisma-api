@@ -11,14 +11,15 @@ import {
 } from '@nestjs/common';
 import { CustomerService } from './customers.service';
 import { PaginationDto } from './dto/pagination.dto';
-import { CreateUpdateCustomerDto } from './dto/createupdate-customer.dto';
+import { CreateCustomerDto } from './dto/create-customer.dto';
+import { UpdateCustomerDto } from './dto/update-customer.dto';
 
 @Controller('customers')
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 
   @Post()
-  create(@Body() createCustomerDto: CreateUpdateCustomerDto) {
+  create(@Body() createCustomerDto: CreateCustomerDto) {
     return this.customerService.create(createCustomerDto);
   }
 
@@ -35,7 +36,7 @@ export class CustomerController {
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateCustomerDto: CreateUpdateCustomerDto,
+    @Body() updateCustomerDto: UpdateCustomerDto,
   ) {
     return this.customerService.update(id, updateCustomerDto);
   }
