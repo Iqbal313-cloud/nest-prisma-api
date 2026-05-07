@@ -9,22 +9,27 @@ export class CustomerService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(paginationDto: PaginationDto) {
-    const { page = 1, limit = 10 } = paginationDto;
+    // Ensure page and limit are numbers
+    const page = Number(paginationDto.page) || 1;
+    const limit = Number(paginationDto.limit) || 10;
 
+    // Calculate how many records to skip
     const skip = (page - 1) * limit;
 
-    const [data, total] = await Promise.all([
+    // Fetch customers with pagination
+    const [total, data] = await Promise.all([
+      this.prisma.customer.count(), // total number of customers
       this.prisma.customer.findMany({
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          orders: true, // optional
+          orders: true, // optional: include related orders
         },
       }),
-      this.prisma.customer.count(),
     ]);
 
+    // Return data with meta
     return {
       data,
       meta: {

@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { CategoriesModule } from './categories/categories.module';
 import { OrdersModule } from './orders/orders.module';
 import { CustomersModule } from './customers/customers.module';
+import { ProductsModule } from './products/products.module';
+import { EmployeesModule } from './employees/employees.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -11,6 +13,8 @@ import { CustomersModule } from './customers/customers.module';
     CategoriesModule,
     OrdersModule,
     CustomersModule,
+    ProductsModule,
+    EmployeesModule,
   ],
 })
 export class AppModule {}
