@@ -11,18 +11,19 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { OrdersService } from './orders.service';
+
 import { CreateOrderDto } from './dto/createOrder.dto';
+import { FindOrdersDto } from './dto/find-orders.dto';
+import { UpdateOrderDto } from './dto/updateOrder.dto';
+import { OrdersService } from './orders.service';
 
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
+
   @Get()
-  async findAll(@Query('page') page = '1', @Query('limit') limit = '10') {
-    return this.ordersService.findAll({
-      page: Number(page),
-      limit: Number(limit),
-    });
+  async findAll(@Query() query: FindOrdersDto) {
+    return this.ordersService.findAll(query);
   }
 
   @Get(':id')
@@ -40,7 +41,7 @@ export class OrdersController {
   @HttpCode(HttpStatus.OK)
   async update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateOrderDto: CreateOrderDto,
+    @Body() updateOrderDto: UpdateOrderDto,
   ) {
     return this.ordersService.update(id, updateOrderDto);
   }

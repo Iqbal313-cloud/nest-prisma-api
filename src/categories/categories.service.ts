@@ -109,5 +109,3 @@ export class CategoriesService {
     });
   }
 }
-
-/*async findAll() { return this.prisma.category.findMany({ include: { children: { include: { children: true, // You can keep going deeper depending on the number of levels }, }, }, }); }*/

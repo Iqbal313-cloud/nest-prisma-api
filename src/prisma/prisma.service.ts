@@ -12,7 +12,31 @@ export class PrismaService
       adapter: new PrismaPg({
         connectionString: process.env.DATABASE_URL,
       }),
-      log: ['query', 'warn', 'error'],
+      log: [
+        {
+          emit: 'event',
+          level: 'query',
+        },
+        {
+          emit: 'stdout',
+          level: 'error',
+        },
+        {
+          emit: 'stdout',
+          level: 'info',
+        },
+        {
+          emit: 'stdout',
+          level: 'warn',
+        },
+      ],
+    });
+    (this as any).$on('query', (e) => {
+      console.log('***********Starting Log*****************');
+      console.log('Query:', e.query);
+      console.log('Params:', e.params);
+      console.log('Duration:', `${e.duration}ms`);
+      console.log('***********Ending Log***********');
     });
   }
 

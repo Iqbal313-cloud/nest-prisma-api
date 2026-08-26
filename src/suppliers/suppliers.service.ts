@@ -118,7 +118,6 @@ export class SuppliersService {
     };
   }
 
-
   async searchAll(query: string) {
     const trimmedQuery = query.trim();
 
