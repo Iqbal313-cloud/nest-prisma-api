@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Logger,
   NotFoundException,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
 } from '@nestjs/common';
@@ -12,9 +14,11 @@ import { CategoriesService } from './categories.service';
 import { Category } from 'src/generated/prisma/client';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { ApiTags } from '@nestjs/swagger';
 // import { CreateCategoryDto } from './dto/create-category.dto';
 // import { UpdateCategoryDto } from './dto/update-category.dto';
 
+@ApiTags('Categories')
 @Controller('categories')
 export class CategoriesController {
   private readonly logger = new Logger(CategoriesController.name);
@@ -54,32 +58,8 @@ export class CategoriesController {
   ): Promise<Category> {
     return this.categoriesService.update(+id, updateCategoryDto);
   }
+
+  @Delete(':id') remove(@Param('id', ParseIntPipe) id: number) {
+    return this.categoriesService.remove(id);
+  }
 }
-/*
-  // @Get(':id') // Define a route for fetching a single category by id
-  // async findOne(
-  //   @Param('id', ParseIntPipe) categoryId: number,
-  // ): Promise<Category> {
-  //   const category =
-  //     await this.categoriesService.findOneWithChildren(categoryId);
-
-  //   if (!category) {
-  //     throw new NotFoundException(`Category with id ${categoryId} not found.`);
-  //   }
-
-  //   return category;
-  // }
-  // 
-  //   // @Get() // HTTP GET request to retrieve all categories
-  // async findAll() {
-  //   return this.categoriesService.findAll(); // Call the service's findAll method
-  // }
-  // 
-  // 
-  // 
-  // 
-  // 
-  // 
-  // 
-  // 
-  // */

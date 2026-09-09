@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Redis } from '@upstash/redis';
 
-/* eslint-disable */
 @Injectable()
 export class RedisService {
   private readonly redis = new Redis({
@@ -13,11 +12,7 @@ export class RedisService {
     return this.redis.get<T>(key);
   }
 
-  async set<T>(
-    key: string,
-    value: T,
-    ttlSeconds?: number,
-  ) {
+  async set<T>(key: string, value: T, ttlSeconds?: number) {
     if (ttlSeconds) {
       return this.redis.set(key, value, {
         ex: ttlSeconds,
@@ -39,6 +34,7 @@ export class RedisService {
     }
   }
 }
+
 // import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 // import { createClient, RedisClientType } from 'redis';
 

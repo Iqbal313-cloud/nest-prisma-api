@@ -1,7 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Category } from 'src/generated/prisma/client';
-// import { CreateCategoryDto } from './dto/create-category.dto';
-// import { UpdateCategoryDto } from './dto/update-category.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -107,5 +105,24 @@ export class CategoriesService {
         parentId,
       },
     });
+  }
+
+  async remove(id: number): Promise<{ message: string; category: Category }> {
+    const category = await this.prisma.category.findUnique({
+      where: { id },
+    });
+
+    if (!category) {
+      throw new BadRequestException('Category not found');
+    }
+
+    const deletedCategory = await this.prisma.category.delete({
+      where: { id },
+    });
+
+    return {
+      message: 'Category deleted successfully',
+      category: deletedCategory,
+    };
   }
 }

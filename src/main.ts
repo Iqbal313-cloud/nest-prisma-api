@@ -1,15 +1,28 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { GlobalExceptionFilter } from './filters/global-exception.filter';
 import * as express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // API Versioning
+  app.setGlobalPrefix('api');
+
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
+
   app.enableCors();
+
   app.use(helmet());
+
   app.use(express.json({ limit: '10kb' }));
+
   app.use(
     express.urlencoded({
       extended: true,
@@ -24,8 +37,20 @@ async function bootstrap() {
       // forbidNonWhitelisted: true,
     }),
   );
+
   app.useGlobalFilters(new GlobalExceptionFilter());
+
+  const config = new DocumentBuilder()
+    .setTitle('E-Commerce API')
+    .setDescription('NestJS Prisma E-Commerce API')
+    .setVersion('1.0')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+
+  SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(process.env.PORT ?? 3000);
 }
+
 bootstrap();

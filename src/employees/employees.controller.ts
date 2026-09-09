@@ -12,15 +12,15 @@ import {
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
-import { PaginationDto } from 'src/customers/dto/pagination.dto';
+import { EmployeeFilterDto } from './dto/employee-filter.dto';
 
 @Controller('employees')
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
 
   @Get()
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.employeesService.findAll(paginationDto);
+  findAll(@Query() filterDto: EmployeeFilterDto) {
+    return this.employeesService.findAll(filterDto);
   }
 
   @Get(':id')

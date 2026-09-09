@@ -4,20 +4,62 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PaginationDto } from 'src/customers/dto/pagination.dto';
 import { NotFoundException } from '@nestjs/common';
+import { EmployeeFilterDto } from './dto/employee-filter.dto';
 
 @Injectable()
 export class EmployeesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(paginationDto: PaginationDto) {
-    const page = Number(paginationDto.page) || 1;
-    const limit = Number(paginationDto.limit) || 10;
-    const skip = (page - 1) * limit;
+  async findAll(filterDto: EmployeeFilterDto) {
+    const {
+      page = 1,
+      limit = 10,
+      id,
+      firstName,
+      lastName,
+      birthDate,
+      orderId,
+      orderDate,
+      orderStatus,
+    } = filterDto;
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const orderWhere = {
+      ...(orderId && { id: orderId }),
+      ...(orderDate && { orderDate }),
+      ...(orderStatus && { orderStatus }),
+    };
+
+    const where = {
+      ...(id && { id }),
+      ...(firstName && {
+        firstName: {
+          contains: firstName,
+          mode: 'insensitive' as const,
+        },
+      }),
+      ...(lastName && {
+        lastName: {
+          contains: lastName,
+          mode: 'insensitive' as const,
+        },
+      }),
+      ...(birthDate && { birthDate }),
+
+      ...(Object.keys(orderWhere).length > 0 && {
+        orders: {
+          some: orderWhere,
+        },
+      }),
+    };
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.employee.findMany({
+        where,
         skip,
-        take: limit,
+        take: Number(limit),
+
         select: {
           id: true,
           firstName: true,
@@ -25,30 +67,35 @@ export class EmployeesService {
           birthDate: true,
           photoPath: true,
           notes: true,
+
           orders: {
+            where: orderWhere,
             select: {
               id: true,
               orderDate: true,
               orderStatus: true,
             },
           },
+
           _count: {
             select: {
-              orders: true,
+              orders: {
+                where: orderWhere,
+              },
             },
           },
         },
       }),
 
-      this.prisma.employee.count(),
+      this.prisma.employee.count({ where }),
     ]);
 
     return {
       data,
       meta: {
         total,
-        page,
-        lastPage: Math.ceil(total / limit),
+        page: Number(page),
+        lastPage: Math.ceil(total / Number(limit)),
       },
     };
   }

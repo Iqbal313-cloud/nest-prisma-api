@@ -13,7 +13,10 @@ import { CustomerService } from './customers.service';
 import { PaginationDto } from './dto/pagination.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { ApiTags } from '@nestjs/swagger';
+import { CustomerFilterDto } from './dto/customer-filter.dto';
 
+@ApiTags('Customers')
 @Controller('customers')
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
@@ -24,8 +27,8 @@ export class CustomerController {
   }
 
   @Get()
-  findAll(@Query() paginationDto: PaginationDto) {
-    return this.customerService.findAll(paginationDto);
+  findAll(@Query() customerFilterDto: CustomerFilterDto) {
+    return this.customerService.findAll(customerFilterDto);
   }
 
   @Get(':id')

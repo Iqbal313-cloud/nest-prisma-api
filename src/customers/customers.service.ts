@@ -3,33 +3,80 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { PaginationDto } from './dto/pagination.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+import { CustomerFilterDto } from './dto/customer-filter.dto';
 
 @Injectable()
 export class CustomerService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(paginationDto: PaginationDto) {
-    // Ensure page and limit are numbers
-    const page = Number(paginationDto.page) || 1;
-    const limit = Number(paginationDto.limit) || 10;
+  async findAll(customerFilterDto: CustomerFilterDto) {
+    const {
+      page = 1,
+      limit = 10,
+      firstName,
+      lastName,
+      phoneNumber,
+      address,
+      orderStatus,
+    } = customerFilterDto;
 
-    // Calculate how many records to skip
     const skip = (page - 1) * limit;
 
-    // Fetch customers with pagination
+    const where = {
+      ...(firstName && {
+        firstName: {
+          contains: firstName,
+          mode: 'insensitive' as const,
+        },
+      }),
+
+      ...(lastName && {
+        lastName: {
+          contains: lastName,
+          mode: 'insensitive' as const,
+        },
+      }),
+
+      ...(phoneNumber && {
+        phoneNumber: {
+          contains: phoneNumber,
+        },
+      }),
+
+      ...(address && {
+        address: {
+          contains: address,
+          mode: 'insensitive' as const,
+        },
+      }),
+
+      ...(orderStatus && {
+        orders: {
+          some: {
+            orderStatus,
+          },
+        },
+      }),
+    };
+
     const [total, data] = await Promise.all([
-      this.prisma.customer.count(), // total number of customers
+      this.prisma.customer.count({
+        where,
+      }),
+
       this.prisma.customer.findMany({
+        where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: {
+          createdAt: 'desc',
+        },
         include: {
-          orders: true, // optional: include related orders
+          orders: true,
         },
       }),
     ]);
 
-    // Return data with meta
     return {
       data,
       meta: {

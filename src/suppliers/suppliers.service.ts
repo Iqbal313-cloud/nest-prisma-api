@@ -2,29 +2,107 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { PaginationDto } from 'src/customers/dto/pagination.dto';
 import { Prisma } from 'src/generated/prisma/client';
+import { SupplierPaginationDto } from './dto/supplier-pagination';
 
 @Injectable()
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
-
-  async findAll(paginationDto: PaginationDto) {
-    const page = Number(paginationDto.page) || 1;
-    const limit = Number(paginationDto.limit) || 10;
+  async findAll(paginationDto: SupplierPaginationDto) {
+    const page = paginationDto.page ?? 1;
+    const limit = paginationDto.limit ?? 10;
     const skip = (page - 1) * limit;
+
+    const {
+      supplierName,
+      contactName,
+      address,
+      city,
+      country,
+      phone,
+      postalCode,
+    } = paginationDto;
+
+    const where: Prisma.SupplierWhereInput = {
+      ...(supplierName && {
+        supplierName: {
+          contains: supplierName.trim(),
+          mode: 'insensitive',
+        },
+      }),
+
+      ...(contactName && {
+        contactName: {
+          contains: contactName.trim(),
+          mode: 'insensitive',
+        },
+      }),
+
+      ...(address && {
+        address: {
+          contains: address.trim(),
+          mode: 'insensitive',
+        },
+      }),
+
+      ...(city && {
+        city: {
+          contains: city.trim(),
+          mode: 'insensitive',
+        },
+      }),
+
+      ...(country && {
+        country: {
+          contains: country.trim(),
+          mode: 'insensitive',
+        },
+      }),
+
+      ...(phone && {
+        phone: {
+          contains: phone.trim(),
+          mode: 'insensitive',
+        },
+      }),
+
+      ...(postalCode && {
+        postalCode: {
+          contains: postalCode.trim(),
+          mode: 'insensitive',
+        },
+      }),
+    };
 
     const [data, total] = await Promise.all([
       this.prisma.supplier.findMany({
+        where,
         skip,
         take: limit,
-        include: {
+
+        orderBy: {
+          id: 'desc',
+        },
+
+        select: {
+          id: true,
+          supplierName: true,
+          contactName: true,
+          address: true,
+          city: true,
+          postalCode: true,
+          country: true,
+          phone: true,
+          createdAt: true,
+          updatedAt: true,
+
           products: {
             select: {
               id: true,
               productName: true,
             },
           },
+
           _count: {
             select: {
               products: true,
@@ -32,7 +110,10 @@ export class SuppliersService {
           },
         },
       }),
-      this.prisma.supplier.count(),
+
+      this.prisma.supplier.count({
+        where,
+      }),
     ]);
 
     return {
@@ -116,49 +197,5 @@ export class SuppliersService {
     return {
       message: `Supplier with ID ${id} has been successfully deleted`,
     };
-  }
-
-  async searchAll(query: string) {
-    const trimmedQuery = query.trim();
-
-    if (!trimmedQuery) {
-      return { data: [], total: 0 };
-    }
-
-    const where: Prisma.SupplierWhereInput = {
-      OR: [
-        {
-          supplierName: {
-            contains: trimmedQuery,
-            mode: Prisma.QueryMode.insensitive,
-          },
-        },
-        {
-          city: { contains: trimmedQuery, mode: Prisma.QueryMode.insensitive },
-        },
-        {
-          country: {
-            contains: trimmedQuery,
-            mode: Prisma.QueryMode.insensitive,
-          },
-        },
-        {
-          contactName: {
-            contains: trimmedQuery,
-            mode: Prisma.QueryMode.insensitive,
-          },
-        },
-      ],
-    };
-
-    const data = await this.prisma.supplier.findMany({
-      where,
-      include: {
-        products: { select: { id: true, productName: true } },
-        _count: { select: { products: true } },
-      },
-    });
-
-    return { data, total: data.length };
   }
 }

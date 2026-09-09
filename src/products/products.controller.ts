@@ -10,12 +10,13 @@ import {
   Query,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
-import { PaginationDto } from 'src/customers/dto/pagination.dto';
+
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-// import { CreateProductDto } from './dto/create-product.dto';
-// import { UpdateProductDto } from './dto/update-product.dto';
+import { PaginationDto } from './dto/productpagination.dto';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Products')
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
