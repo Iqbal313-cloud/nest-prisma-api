@@ -3,15 +3,19 @@ import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from 'src/generated/prisma/client';
-import { SupplierPaginationDto } from './dto/supplier-pagination';
+import { SupplierFilterDto } from './dto/supplier-filter.dto';
+import {
+  getPagination,
+  getPaginationMeta,
+} from 'src/common/utils/pagination.util';
 
 @Injectable()
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
-  async findAll(paginationDto: SupplierPaginationDto) {
+  async findAll(paginationDto: SupplierFilterDto) {
     const page = paginationDto.page ?? 1;
     const limit = paginationDto.limit ?? 10;
-    const skip = (page - 1) * limit;
+    const pagination = getPagination(page, limit);
 
     const {
       supplierName,
@@ -77,8 +81,8 @@ export class SuppliersService {
     const [data, total] = await Promise.all([
       this.prisma.supplier.findMany({
         where,
-        skip,
-        take: limit,
+        skip: pagination.skip,
+        take: pagination.take,
 
         orderBy: {
           id: 'desc',
@@ -118,10 +122,7 @@ export class SuppliersService {
 
     return {
       data,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      meta: getPaginationMeta(total, pagination.page, pagination.limit),
     };
   }
 

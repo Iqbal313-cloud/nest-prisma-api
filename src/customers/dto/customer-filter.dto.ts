@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsEnum } from 'class-validator';
-import { PaginationDto } from './pagination.dto';
+import { PaginationDto } from '../../common/utils/pagination.dto';
 import { OrderStatus } from 'src/generated/prisma/enums';
 
 export class CustomerFilterDto extends PaginationDto {

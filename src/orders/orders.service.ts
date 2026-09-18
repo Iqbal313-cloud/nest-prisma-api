@@ -8,6 +8,10 @@ import { FindOrdersDto } from './dto/find-orders.dto';
 import { CreateOrderDto } from './dto/createOrder.dto';
 import { OrdersMapper } from './dto/orders.mapper';
 import { UpdateOrderDto } from './dto/updateOrder.dto';
+import {
+  getPagination,
+  getPaginationMeta,
+} from 'src/common/utils/pagination.util';
 
 @Injectable()
 export class OrdersService {
@@ -84,7 +88,7 @@ export class OrdersService {
     // Pagination
     // =========================================================
 
-    const skip = (page - 1) * limit;
+    const pagination = getPagination(page, limit);
 
     // =========================================================
     // WHERE
@@ -263,8 +267,8 @@ export class OrdersService {
 
     const [orders, total] = await Promise.all([
       this.prisma.orders.findMany({
-        skip,
-        take: limit,
+        skip: pagination.skip,
+        take: pagination.take,
 
         where,
 
@@ -334,12 +338,7 @@ export class OrdersService {
     const response = {
       data,
 
-      meta: {
-        total,
-        page,
-        lastPage: Math.ceil(total / limit),
-        limit,
-      },
+      meta: getPaginationMeta(total, pagination.page, pagination.limit),
     };
 
     const end = performance.now();

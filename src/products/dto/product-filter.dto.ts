@@ -6,37 +6,11 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  Max,
   Min,
 } from 'class-validator';
+import { PaginationDto } from 'src/common/utils/pagination.dto';
 
-export class PaginationDto {
-  @ApiPropertyOptional({
-    example: 1,
-    default: 1,
-    minimum: 1,
-    description: 'Page number',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number;
-
-  @ApiPropertyOptional({
-    example: 10,
-    default: 10,
-    minimum: 1,
-    maximum: 100,
-    description: 'Number of products per page',
-  })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number;
-
+export class ProductFilterDto extends PaginationDto {
   @ApiPropertyOptional({
     example: 'iPhone',
     description: 'Filter products by name',

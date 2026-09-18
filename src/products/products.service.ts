@@ -4,7 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { PaginationDto } from './dto/productpagination.dto';
+import { ProductFilterDto } from './dto/product-filter.dto';
+import {
+  getPagination,
+  getPaginationMeta,
+} from 'src/common/utils/pagination.util';
 
 @Injectable()
 export class ProductsService {
@@ -42,7 +46,7 @@ export class ProductsService {
     return slug;
   }
 
-  async findAll(paginationDto: PaginationDto) {
+  async findAll(paginationDto: ProductFilterDto) {
     const {
       page = 1,
       limit = 10,
@@ -56,7 +60,7 @@ export class ProductsService {
       maxPrice,
     } = paginationDto;
 
-    const skip = (page - 1) * limit;
+    const pagination = getPagination(page, limit);
 
     const where = {
       ...(productName?.trim() && {
@@ -112,8 +116,8 @@ export class ProductsService {
 
       this.prisma.product.findMany({
         where,
-        skip,
-        take: limit,
+        skip: pagination.skip,
+        take: pagination.take,
 
         select: {
           id: true,
@@ -204,12 +208,7 @@ export class ProductsService {
 
     return {
       data,
-      meta: {
-        total,
-        page,
-        limit,
-        lastPage: Math.ceil(total / limit),
-      },
+      meta: getPaginationMeta(total, pagination.page, pagination.limit),
     };
   }
 

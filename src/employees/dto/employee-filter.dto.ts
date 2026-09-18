@@ -8,7 +8,7 @@ import {
   Min,
 } from 'class-validator';
 
-import { PaginationDto } from 'src/customers/dto/pagination.dto';
+import { PaginationDto } from 'src/common/utils/pagination.dto';
 import { OrderStatus } from 'src/generated/prisma/enums';
 
 export class EmployeeFilterDto extends PaginationDto {

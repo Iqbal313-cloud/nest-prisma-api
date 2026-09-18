@@ -13,7 +13,7 @@ import { SuppliersService } from './suppliers.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { ApiTags } from '@nestjs/swagger';
-import { SupplierPaginationDto } from './dto/supplier-pagination';
+import { SupplierFilterDto } from './dto/supplier-filter.dto';
 
 @ApiTags('Suppliers')
 @Controller('suppliers')
@@ -21,7 +21,7 @@ export class SuppliersController {
   constructor(private readonly suppliersService: SuppliersService) {}
 
   @Get()
-  async findAll(@Query() paginationDto: SupplierPaginationDto) {
+  async findAll(@Query() paginationDto: SupplierFilterDto) {
     return this.suppliersService.findAll(paginationDto);
   }
 

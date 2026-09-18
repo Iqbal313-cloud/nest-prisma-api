@@ -2,9 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { PaginationDto } from 'src/customers/dto/pagination.dto';
 import { NotFoundException } from '@nestjs/common';
 import { EmployeeFilterDto } from './dto/employee-filter.dto';
+import {
+  getPagination,
+  getPaginationMeta,
+} from 'src/common/utils/pagination.util';
 
 @Injectable()
 export class EmployeesService {
@@ -23,7 +26,7 @@ export class EmployeesService {
       orderStatus,
     } = filterDto;
 
-    const skip = (Number(page) - 1) * Number(limit);
+    const pagination = getPagination(page, limit);
 
     const orderWhere = {
       ...(orderId && { id: orderId }),
@@ -57,8 +60,8 @@ export class EmployeesService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.employee.findMany({
         where,
-        skip,
-        take: Number(limit),
+        skip: pagination.skip,
+        take: pagination.take,
 
         select: {
           id: true,
@@ -92,11 +95,7 @@ export class EmployeesService {
 
     return {
       data,
-      meta: {
-        total,
-        page: Number(page),
-        lastPage: Math.ceil(total / Number(limit)),
-      },
+      meta: getPaginationMeta(total, pagination.page, pagination.limit),
     };
   }
 

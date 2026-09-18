@@ -10,7 +10,6 @@ import {
   Query,
 } from '@nestjs/common';
 import { CustomerService } from './customers.service';
-import { PaginationDto } from './dto/pagination.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { ApiTags } from '@nestjs/swagger';

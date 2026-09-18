@@ -1,9 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { PaginationDto } from './dto/pagination.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerFilterDto } from './dto/customer-filter.dto';
+import {
+  getPagination,
+  getPaginationMeta,
+} from 'src/common/utils/pagination.util';
 
 @Injectable()
 export class CustomerService {
@@ -20,7 +23,7 @@ export class CustomerService {
       orderStatus,
     } = customerFilterDto;
 
-    const skip = (page - 1) * limit;
+    const pagination = getPagination(page, limit);
 
     const where = {
       ...(firstName && {
@@ -66,8 +69,9 @@ export class CustomerService {
 
       this.prisma.customer.findMany({
         where,
-        skip,
-        take: limit,
+        skip: pagination.skip,
+        take: pagination.take,
+
         orderBy: {
           createdAt: 'desc',
         },
@@ -79,12 +83,7 @@ export class CustomerService {
 
     return {
       data,
-      meta: {
-        total,
-        page,
-        lastPage: Math.ceil(total / limit),
-        limit,
-      },
+      meta: getPaginationMeta(total, pagination.page, pagination.limit),
     };
   }
 
