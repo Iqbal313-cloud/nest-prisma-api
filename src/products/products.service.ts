@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { format } from '@fast-csv/format';
+import { Response } from 'express';
 
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -47,67 +53,11 @@ export class ProductsService {
   }
 
   async findAll(paginationDto: ProductFilterDto) {
-    const {
-      page = 1,
-      limit = 10,
-      productName,
-      slug,
-      sku,
-      categoryId,
-      supplierId,
-      discontinued,
-      minPrice,
-      maxPrice,
-    } = paginationDto;
+    const { page = 1, limit = 10 } = paginationDto;
 
     const pagination = getPagination(page, limit);
 
-    const where = {
-      ...(productName?.trim() && {
-        productName: {
-          contains: productName.trim(),
-          mode: 'insensitive' as const,
-        },
-      }),
-
-      ...(slug?.trim() && {
-        slug: {
-          contains: slug.trim(),
-          mode: 'insensitive' as const,
-        },
-      }),
-
-      ...(sku?.trim() && {
-        sku: {
-          contains: sku.trim(),
-          mode: 'insensitive' as const,
-        },
-      }),
-
-      ...(categoryId !== undefined && {
-        categoryId,
-      }),
-
-      ...(supplierId !== undefined && {
-        supplierId,
-      }),
-
-      ...(discontinued !== undefined && {
-        discontinued: discontinued === 'true',
-      }),
-
-      ...((minPrice !== undefined || maxPrice !== undefined) && {
-        unitPrice: {
-          ...(minPrice !== undefined && {
-            gte: minPrice,
-          }),
-
-          ...(maxPrice !== undefined && {
-            lte: maxPrice,
-          }),
-        },
-      }),
-    };
+    const where = this.buildProductFilter(paginationDto);
 
     const [total, data] = await Promise.all([
       this.prisma.product.count({
@@ -159,36 +109,36 @@ export class ProductsService {
     if (total === 0) {
       const filters: string[] = [];
 
-      if (productName?.trim()) {
-        filters.push(`productName="${productName.trim()}"`);
+      if (paginationDto.productName?.trim()) {
+        filters.push(`productName="${paginationDto.productName.trim()}"`);
       }
 
-      if (slug?.trim()) {
-        filters.push(`slug="${slug.trim()}"`);
+      if (paginationDto.slug?.trim()) {
+        filters.push(`slug="${paginationDto.slug.trim()}"`);
       }
 
-      if (sku?.trim()) {
-        filters.push(`sku="${sku.trim()}"`);
+      if (paginationDto.sku?.trim()) {
+        filters.push(`sku="${paginationDto.sku.trim()}"`);
       }
 
-      if (categoryId !== undefined) {
-        filters.push(`categoryId=${categoryId}`);
+      if (paginationDto.categoryId !== undefined) {
+        filters.push(`categoryId=${paginationDto.categoryId}`);
       }
 
-      if (supplierId !== undefined) {
-        filters.push(`supplierId=${supplierId}`);
+      if (paginationDto.supplierId !== undefined) {
+        filters.push(`supplierId=${paginationDto.supplierId}`);
       }
 
-      if (discontinued !== undefined) {
-        filters.push(`discontinued=${discontinued}`);
+      if (paginationDto.discontinued !== undefined) {
+        filters.push(`discontinued=${paginationDto.discontinued}`);
       }
 
-      if (minPrice !== undefined) {
-        filters.push(`minPrice=${minPrice}`);
+      if (paginationDto.minPrice !== undefined) {
+        filters.push(`minPrice=${paginationDto.minPrice}`);
       }
 
-      if (maxPrice !== undefined) {
-        filters.push(`maxPrice=${maxPrice}`);
+      if (paginationDto.maxPrice !== undefined) {
+        filters.push(`maxPrice=${paginationDto.maxPrice}`);
       }
 
       throw new NotFoundException(
@@ -210,6 +160,204 @@ export class ProductsService {
       data,
       meta: getPaginationMeta(total, pagination.page, pagination.limit),
     };
+  }
+
+  private buildProductFilter(filterDto: ProductFilterDto) {
+    const {
+      productName,
+      slug,
+      sku,
+      categoryId,
+      supplierId,
+      discontinued,
+      minPrice,
+      maxPrice,
+    } = filterDto;
+
+    return {
+      ...(productName?.trim() && {
+        productName: {
+          contains: productName.trim(),
+          mode: 'insensitive' as const,
+        },
+      }),
+
+      ...(slug?.trim() && {
+        slug: {
+          contains: slug.trim(),
+          mode: 'insensitive' as const,
+        },
+      }),
+
+      ...(sku?.trim() && {
+        sku: {
+          contains: sku.trim(),
+          mode: 'insensitive' as const,
+        },
+      }),
+
+      ...(categoryId !== undefined && {
+        categoryId,
+      }),
+
+      ...(supplierId !== undefined && {
+        supplierId,
+      }),
+
+      ...(discontinued !== undefined && {
+        discontinued: discontinued === 'true',
+      }),
+
+      ...((minPrice !== undefined || maxPrice !== undefined) && {
+        unitPrice: {
+          ...(minPrice !== undefined && {
+            gte: minPrice,
+          }),
+
+          ...(maxPrice !== undefined && {
+            lte: maxPrice,
+          }),
+        },
+      }),
+    };
+  }
+
+  async exportToCsv(filterDto: ProductFilterDto, response: Response) {
+    // =========================
+    // Prevent unfiltered export
+    // =========================
+    const hasFilter =
+      filterDto.productName?.trim() ||
+      filterDto.slug?.trim() ||
+      filterDto.sku?.trim() ||
+      filterDto.categoryId !== undefined ||
+      filterDto.supplierId !== undefined ||
+      filterDto.discontinued !== undefined ||
+      filterDto.minPrice !== undefined ||
+      filterDto.maxPrice !== undefined;
+
+    if (!hasFilter) {
+      throw new BadRequestException('CSV export requires at least one filter');
+    }
+
+    // =========================
+    // Build filters
+    // =========================
+    const where = this.buildProductFilter(filterDto);
+
+    const batchSize = 1000;
+
+    const csvStream = format({
+      headers: [
+        'ID',
+        'Product Name',
+        'Slug',
+        'SKU',
+        'Short Description',
+        'Description',
+        'Quantity Per Unit',
+        'Unit Price',
+        'Units In Stock',
+        'Units On Order',
+        'Discontinued',
+        'Category',
+        'Supplier',
+        'Created At',
+        'Updated At',
+      ],
+    });
+
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+
+    response.setHeader(
+      'Content-Disposition',
+      'attachment; filename="products.csv"',
+    );
+
+    csvStream.pipe(response);
+
+    let lastProductId: number | undefined;
+
+    while (true) {
+      const products = await this.prisma.product.findMany({
+        where: {
+          ...where,
+
+          ...(lastProductId !== undefined && {
+            id: {
+              gt: lastProductId,
+            },
+          }),
+        },
+
+        take: batchSize,
+
+        orderBy: {
+          id: 'asc',
+        },
+
+        select: {
+          id: true,
+          productName: true,
+          slug: true,
+          sku: true,
+          shortDescription: true,
+          description: true,
+          quantityPerUnit: true,
+          unitPrice: true,
+          unitsInStock: true,
+          unitsOnOrder: true,
+          discontinued: true,
+
+          category: {
+            select: {
+              categoryName: true,
+            },
+          },
+
+          supplier: {
+            select: {
+              supplierName: true,
+            },
+          },
+
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (products.length === 0) {
+        break;
+      }
+
+      for (const product of products) {
+        csvStream.write({
+          ID: product.id,
+          'Product Name': product.productName,
+          Slug: product.slug,
+          SKU: product.sku,
+          'Short Description': product.shortDescription ?? '',
+          Description: product.description ?? '',
+          'Quantity Per Unit': product.quantityPerUnit ?? '',
+          'Unit Price': product.unitPrice,
+          'Units In Stock': product.unitsInStock,
+          'Units On Order': product.unitsOnOrder,
+          Discontinued: product.discontinued,
+          Category: product.category?.categoryName ?? '',
+          Supplier: product.supplier?.supplierName ?? '',
+          'Created At': product.createdAt,
+          'Updated At': product.updatedAt,
+        });
+      }
+
+      lastProductId = products[products.length - 1].id;
+
+      if (products.length < batchSize) {
+        break;
+      }
+    }
+
+    csvStream.end();
   }
 
   async findOne(id: number) {

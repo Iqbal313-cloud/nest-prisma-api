@@ -14,6 +14,17 @@ import { OrderStatus } from 'src/generated/prisma/enums';
 
 export class FindOrdersDto extends PaginationDto {
   @ApiPropertyOptional({
+    example: 200,
+    description: 'Filter orders by order ID',
+    minimum: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  orderId?: number;
+
+  @ApiPropertyOptional({
     example: 'laptop',
     description: 'Search orders by customer, employee, or product information',
   })

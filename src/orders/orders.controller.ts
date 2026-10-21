@@ -12,10 +12,10 @@ import {
   Query,
 } from '@nestjs/common';
 
-import { CreateOrderDto } from './dto/createOrder.dto';
 import { FindOrdersDto } from './dto/find-orders.dto';
 import { UpdateOrderDto } from './dto/updateOrder.dto';
 import { OrdersService } from './orders.service';
+import { CreateOrderDto } from './dto/create-order.dto';
 
 @Controller('orders')
 export class OrdersController {

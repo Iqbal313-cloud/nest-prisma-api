@@ -5,13 +5,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 
 import { FindOrdersDto } from './dto/find-orders.dto';
-import { CreateOrderDto } from './dto/createOrder.dto';
 import { OrdersMapper } from './dto/orders.mapper';
-import { UpdateOrderDto } from './dto/updateOrder.dto';
 import {
   getPagination,
   getPaginationMeta,
 } from 'src/common/utils/pagination.util';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderDto } from './dto/updateOrder.dto';
 
 @Injectable()
 export class OrdersService {
@@ -28,6 +28,7 @@ export class OrdersService {
     const start = performance.now();
 
     const {
+      orderId,
       page = 1,
       limit = 10,
       search,
@@ -47,6 +48,7 @@ export class OrdersService {
     // =========================================================
 
     const cacheParams = {
+      orderId: orderId ?? null,
       page,
       limit,
       search: search || null,
@@ -95,6 +97,11 @@ export class OrdersService {
     // =========================================================
 
     const where: Prisma.OrdersWhereInput = {
+      // Order ID filter
+      ...(orderId !== undefined && {
+        id: orderId,
+      }),
+
       ...(orderStatus && {
         orderStatus,
       }),
@@ -186,11 +193,14 @@ export class OrdersService {
         ? {
             orderDate: {
               ...(fromDate && {
-                gte: new Date(fromDate),
+                gte: new Date(`${fromDate}T00:00:00.000Z`),
               }),
 
               ...(toDate && {
-                lte: new Date(toDate),
+                lt: new Date(
+                  new Date(`${toDate}T00:00:00.000Z`).getTime() +
+                    24 * 60 * 60 * 1000,
+                ),
               }),
             },
           }
@@ -267,6 +277,8 @@ export class OrdersService {
 
     const [orders, total] = await Promise.all([
       this.prisma.orders.findMany({
+        relationLoadStrategy: 'join',
+
         skip: pagination.skip,
         take: pagination.take,
 
@@ -280,6 +292,8 @@ export class OrdersService {
           id: true,
           orderDate: true,
           orderStatus: true,
+          createdAt: true,
+          updatedAt: true,
 
           customer: {
             select: {
@@ -330,14 +344,13 @@ export class OrdersService {
       orderDetails: order.orderDetails.map((od) => ({
         quantity: od.quantity,
         unitPrice: Number(Number(od.unitPrice).toFixed(2)),
-        discount: Number((Number(od.discount) * 100).toFixed(2)),
+        discount: Number(od.discount),
         productName: od.product.productName,
       })),
     }));
 
     const response = {
       data,
-
       meta: getPaginationMeta(total, pagination.page, pagination.limit),
     };
 
@@ -391,6 +404,8 @@ export class OrdersService {
         id: true,
         orderDate: true,
         orderStatus: true,
+        createdAt: true,
+        updatedAt: true,
 
         customer: {
           select: {
@@ -409,9 +424,15 @@ export class OrdersService {
         },
 
         orderDetails: {
-          include: {
+          select: {
+            id: true,
+            productId: true,
+            quantity: true,
+            unitPrice: true,
+            discount: true,
             product: {
               select: {
+                id: true,
                 productName: true,
               },
             },
@@ -450,242 +471,234 @@ export class OrdersService {
   // =========================================================
 
   async create(dto: CreateOrderDto) {
-    const { orderDate, orderStatus, customerId, employeeId, orderDetails } =
-      dto;
+    const {
+      customerFirstName,
+      customerLastName,
+      customerPhone,
+      customerAddress,
+      orderDate,
+      orderStatus,
+      employeeId,
+      orderDetails,
+    } = dto;
 
-    const order = await this.prisma.orders.create({
-      data: {
-        orderDate: orderDate ?? new Date(),
-
-        orderStatus: orderStatus ?? 'PENDING',
-
-        customer: customerId
-          ? {
-              connect: {
-                id: customerId,
-              },
-            }
-          : undefined,
-
-        employee: employeeId
-          ? {
-              connect: {
-                id: employeeId,
-              },
-            }
-          : undefined,
-
-        orderDetails: {
-          create: orderDetails.map((item) => ({
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            discount: item.discount,
-
-            product: {
-              connect: {
-                id: item.productId,
-              },
-            },
-          })),
+    const order = await this.prisma.$transaction(async (tx) => {
+      // Existing customer খোঁজা — phone number exact match
+      let customer = await tx.customer.findFirst({
+        where: {
+          phoneNumber: customerPhone,
         },
-      },
+      });
 
-      include: {
-        customer: true,
+      // Customer না থাকলে নতুন customer তৈরি
+      if (!customer) {
+        customer = await tx.customer.create({
+          data: {
+            firstName: customerFirstName,
+            lastName: customerLastName ?? null,
+            phoneNumber: customerPhone,
+            address: customerAddress ?? null,
+          },
+        });
+      }
 
-        employee: true,
+      return tx.orders.create({
+        data: {
+          orderDate: orderDate ?? new Date(),
+          orderStatus: orderStatus ?? 'PENDING',
 
-        orderDetails: {
-          include: {
-            product: {
-              select: {
-                productName: true,
+          customer: {
+            connect: { id: customer.id },
+          },
+
+          employee: employeeId ? { connect: { id: employeeId } } : undefined,
+
+          orderDetails: {
+            create: orderDetails.map((item) => ({
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              discount: item.discount ?? 0,
+              product: {
+                connect: { id: item.productId },
+              },
+            })),
+          },
+        },
+        include: {
+          customer: true,
+          employee: true,
+          orderDetails: {
+            include: {
+              product: {
+                select: { productName: true },
               },
             },
           },
         },
-      },
+      });
     });
 
-    // =========================================================
-    // Calculate total
-    // =========================================================
-
-    const totalAmount = order.orderDetails.reduce((sum, od) => {
-      const unitPrice = Number(od.unitPrice);
-      const discount = Number(od.discount);
-
-      return sum + od.quantity * unitPrice * (1 - discount);
-    }, 0);
-
-    // =========================================================
-    // Response
-    // =========================================================
-
-    const response = {
-      ...order,
-
-      totalAmount: Number(totalAmount.toFixed(2)),
-
-      orderDetails: order.orderDetails.map((od) => ({
-        quantity: od.quantity,
-        unitPrice: od.unitPrice,
-        discount: od.discount,
-        productName: od.product.productName,
-      })),
-    };
-
-    // =========================================================
-    // Invalidate order list cache
-    // =========================================================
-
-    console.log('========================================');
-    console.log('REDIS CACHE INVALIDATION');
-    console.log('Deleting order list caches:', 'orders:list:*');
+    const totalAmount = order.orderDetails.reduce(
+      (sum, item) =>
+        sum +
+        item.quantity *
+          Number(item.unitPrice) *
+          (1 - Number(item.discount) / 100),
+      0,
+    );
 
     await this.redis.deleteByPattern('orders:list:*');
 
-    console.log('Redis cache invalidation completed');
-    console.log('========================================');
-
-    return response;
+    return {
+      ...order,
+      totalAmount: Number(totalAmount.toFixed(2)),
+      orderDetails: order.orderDetails.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+        productName: item.product.productName,
+      })),
+    };
   }
 
-  // =========================================================
-  // UPDATE
-  // =========================================================
-
   async update(id: number, dto: UpdateOrderDto) {
-    console.log('========================================');
-    console.log('PATCH UPDATE CALLED');
-    console.log('ID:', id);
-    console.log('DTO:', JSON.stringify(dto, null, 2));
-    console.log('========================================');
-    const { orderDate, orderStatus, customerId, employeeId, orderDetails } =
-      dto;
+    const {
+      customerFirstName,
+      customerLastName,
+      customerPhone,
+      customerAddress,
+      orderDate,
+      orderStatus,
+      employeeId,
+      orderDetails,
+    } = dto;
 
-    // =========================================================
-    // Update order + replace order details
-    // =========================================================
+    const updatedOrder = await this.prisma.$transaction(async (tx) => {
+      const existingOrder = await tx.orders.findUniqueOrThrow({
+        where: { id },
+        include: { customer: true },
+      });
 
-    const updatedOrder = await this.prisma.orders.update({
-      where: {
-        id,
-      },
+      let customerUpdate: { connect: { id: number } } | undefined;
 
-      data: {
-        // PATCH হলে value না পাঠালে existing value থাকবে
-        orderDate: orderDate ?? undefined,
+      if (customerPhone !== undefined) {
+        // Phone match == existing customer
+        let customer = await tx.customer.findFirst({
+          where: {
+            phoneNumber: customerPhone,
+          },
+        });
 
-        orderStatus: orderStatus ?? undefined,
+        if (!customer) {
+          // new customer
+          if (!customerFirstName?.trim()) {
+            throw new Error(
+              'Customer first name is required for a new phone number.',
+            );
+          }
 
-        customer: customerId
-          ? {
-              connect: {
-                id: customerId,
-              },
-            }
-          : undefined,
+          customer = await tx.customer.create({
+            data: {
+              firstName: customerFirstName,
+              lastName: customerLastName ?? null,
+              phoneNumber: customerPhone,
+              address: customerAddress ?? null,
+            },
+          });
+        }
 
-        employee: employeeId
-          ? {
-              connect: {
-                id: employeeId,
-              },
-            }
-          : undefined,
+        customerUpdate = {
+          connect: { id: customer.id },
+        };
+      } else if (
+        customerFirstName !== undefined ||
+        customerLastName !== undefined ||
+        customerAddress !== undefined
+      ) {
+        // existing customer information update
+        if (existingOrder.customerId !== null) {
+          await tx.customer.update({
+            where: { id: existingOrder.customerId },
+            data: {
+              ...(customerFirstName !== undefined
+                ? { firstName: customerFirstName }
+                : {}),
+              ...(customerLastName !== undefined
+                ? { lastName: customerLastName }
+                : {}),
+              ...(customerAddress !== undefined
+                ? { address: customerAddress }
+                : {}),
+            },
+          });
+        }
+      }
 
-        // =====================================================
-        // Replace all existing order details
-        // =====================================================
+      return tx.orders.update({
+        where: { id },
+        data: {
+          orderDate: orderDate ?? undefined,
+          orderStatus: orderStatus ?? undefined,
+          customer: customerUpdate,
 
-        orderDetails: orderDetails
-          ? {
-              deleteMany: {},
+          employee: employeeId ? { connect: { id: employeeId } } : undefined,
 
-              create: orderDetails.map((item) => ({
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                discount: item.discount,
-
-                product: {
-                  connect: {
-                    id: item.productId,
+          orderDetails: orderDetails
+            ? {
+                deleteMany: {},
+                create: orderDetails.map((item) => ({
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  discount: item.discount ?? 0,
+                  product: {
+                    connect: { id: item.productId },
                   },
-                },
-              })),
-            }
-          : undefined,
-      },
-
-      include: {
-        customer: true,
-
-        employee: true,
-
-        orderDetails: {
-          include: {
-            product: {
-              select: {
-                productName: true,
+                })),
+              }
+            : undefined,
+        },
+        include: {
+          customer: true,
+          employee: true,
+          orderDetails: {
+            include: {
+              product: {
+                select: { productName: true },
               },
             },
           },
         },
-      },
+      });
     });
 
-    // =========================================================
-    // Calculate total
-    // =========================================================
-
-    const totalAmount = updatedOrder.orderDetails.reduce((sum, od) => {
-      const unitPrice = Number(od.unitPrice);
-      const discount = Number(od.discount);
-
-      return sum + od.quantity * unitPrice * (1 - discount);
-    }, 0);
-
-    // =========================================================
-    // Response
-    // =========================================================
-
-    const response = {
-      ...updatedOrder,
-
-      totalAmount: Number(totalAmount.toFixed(2)),
-
-      orderDetails: updatedOrder.orderDetails.map((od) => ({
-        quantity: od.quantity,
-        unitPrice: od.unitPrice,
-        discount: od.discount,
-        productName: od.product.productName,
-      })),
-    };
-
-    // =========================================================
-    // Redis cache invalidation
-    // =========================================================
-
-    // =========================================================
-    // Redis Cache Invalidation
-    // =========================================================
-
-    console.log('========================================');
-    console.log('REDIS CACHE INVALIDATION');
-    console.log('Order ID:', id);
-    console.log('Deleting single order cache:', `order:${id}`);
-    console.log('Deleting order list caches:', 'orders:list:*');
+    const totalAmount = updatedOrder.orderDetails.reduce(
+      (sum, item) =>
+        sum +
+        item.quantity *
+          Number(item.unitPrice) *
+          (1 - Number(item.discount) / 100),
+      0,
+    );
 
     await Promise.all([
       this.redis.del(`order:${id}`),
       this.redis.deleteByPattern('orders:list:*'),
     ]);
 
-    console.log('Redis cache invalidation completed');
-    console.log('========================================');
-
-    return response;
+    return {
+      ...updatedOrder,
+      totalAmount: Number(totalAmount.toFixed(2)),
+      orderDetails: updatedOrder.orderDetails.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discount: item.discount,
+        productName: item.product.productName,
+      })),
+    };
   }
 
   // =========================================================

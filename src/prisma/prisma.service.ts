@@ -8,36 +8,39 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
+    const connectionString = process.env.DATABASE_URL;
+
+    if (!connectionString) {
+      throw new Error('DATABASE_URL is not configured');
+    }
+
+    const adapter = new PrismaPg({
+      connectionString,
+      max: 10,
+      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 10000,
+    });
+
     super({
-      adapter: new PrismaPg({
-        connectionString: process.env.DATABASE_URL,
-      }),
+      adapter,
       log: [
-        {
-          emit: 'event',
-          level: 'query',
-        },
-        {
-          emit: 'stdout',
-          level: 'error',
-        },
-        {
-          emit: 'stdout',
-          level: 'info',
-        },
-        {
-          emit: 'stdout',
-          level: 'warn',
-        },
+        { emit: 'event', level: 'query' },
+        { emit: 'stdout', level: 'error' },
+        { emit: 'stdout', level: 'info' },
+        { emit: 'stdout', level: 'warn' },
       ],
     });
-    (this as any).$on('query', (e) => {
-      console.log('***********Starting Log*****************');
-      console.log('Query:', e.query);
-      console.log('Params:', e.params);
-      console.log('Duration:', `${e.duration}ms`);
-      console.log('***********Ending Log***********');
-    });
+
+    (this as any).$on(
+      'query',
+      (e: { query: string; params: string; duration: number }) => {
+        console.log('*********** Prisma Query ***********');
+        console.log('Query:', e.query);
+        console.log('Params:', e.params);
+        console.log('Duration:', `${e.duration}ms`);
+        console.log('************************************');
+      },
+    );
   }
 
   async onModuleInit() {
@@ -46,5 +49,15 @@ export class PrismaService
 
   async onModuleDestroy() {
     await this.$disconnect();
+  }
+
+  async testDbLatency() {
+    const start = performance.now();
+
+    await this.$queryRaw`SELECT 1`;
+
+    const dbRoundTripMs = Number((performance.now() - start).toFixed(2));
+
+    return { dbRoundTripMs };
   }
 }

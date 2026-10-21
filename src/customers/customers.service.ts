@@ -71,12 +71,17 @@ export class CustomerService {
         where,
         skip: pagination.skip,
         take: pagination.take,
-
         orderBy: {
           createdAt: 'desc',
         },
         include: {
-          orders: true,
+          orders: {
+            ...(orderStatus && {
+              where: {
+                orderStatus,
+              },
+            }),
+          },
         },
       }),
     ]);

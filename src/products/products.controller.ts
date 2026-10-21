@@ -8,8 +8,10 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
+import { Response } from 'express';
 
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -24,6 +26,14 @@ export class ProductsController {
   @Get()
   async findAll(@Query() paginationDto: ProductFilterDto) {
     return this.productsService.findAll(paginationDto);
+  }
+
+  @Get('export')
+  async exportToCsv(
+    @Query() filterDto: ProductFilterDto,
+    @Res() response: Response,
+  ) {
+    return this.productsService.exportToCsv(filterDto, response);
   }
 
   @Get(':id')
