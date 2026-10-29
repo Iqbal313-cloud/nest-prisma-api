@@ -14,6 +14,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { LoggerMiddleware } from './middleware/logger.middleware';
 import { RedisModule } from './redis/redis.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { RedisModule } from './redis/redis.module';
     EmployeesModule,
     SuppliersModule,
     RedisModule,
+    AnalyticsModule,
+    MonitoringModule,
   ],
   providers: [
     {

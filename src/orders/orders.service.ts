@@ -277,7 +277,7 @@ export class OrdersService {
 
     const [orders, total] = await Promise.all([
       this.prisma.orders.findMany({
-        relationLoadStrategy: 'join',
+        relationLoadStrategy: 'query',
 
         skip: pagination.skip,
         take: pagination.take,
