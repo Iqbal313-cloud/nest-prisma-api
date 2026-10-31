@@ -3,7 +3,16 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { admin as adminPlugin } from 'better-auth/plugins';
 
 import { PrismaClient } from '../generated/prisma/client';
-import { ac, admin, manager, sales } from './permissions';
+import {
+  ac,
+  superAdmin,
+  admin,
+  manager,
+  sales,
+  accountant,
+  inventoryManager,
+  viewer,
+} from './permissions';
 
 export function createAuth(prisma: PrismaClient) {
   const secret = process.env.BETTER_AUTH_SECRET;
@@ -50,10 +59,15 @@ export function createAuth(prisma: PrismaClient) {
       adminPlugin({
         ac,
         roles: {
+          superAdmin,
           admin,
           manager,
           sales,
+          accountant,
+          inventoryManager,
+          viewer,
         },
+        adminRoles: ['admin', 'superAdmin'],
         defaultRole: 'sales',
       }),
     ],

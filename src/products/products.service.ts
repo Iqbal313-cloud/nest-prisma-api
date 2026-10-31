@@ -101,7 +101,7 @@ export class ProductsService {
         },
 
         orderBy: {
-          id: 'asc',
+          id: 'desc',
         },
       }),
     ]);

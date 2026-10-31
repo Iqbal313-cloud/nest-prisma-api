@@ -14,6 +14,7 @@ import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { SupplierFilterDto } from './dto/supplier-filter.dto';
+import { UserHasPermission } from '@thallesp/nestjs-better-auth';
 
 @ApiTags('Suppliers')
 @Controller('suppliers')
@@ -21,21 +22,41 @@ export class SuppliersController {
   constructor(private readonly suppliersService: SuppliersService) {}
 
   @Get()
+  @UserHasPermission({
+    permission: {
+      supplier: ['read'],
+    },
+  })
   async findAll(@Query() paginationDto: SupplierFilterDto) {
     return this.suppliersService.findAll(paginationDto);
   }
 
   @Get(':id')
+  @UserHasPermission({
+    permission: {
+      supplier: ['read'],
+    },
+  })
   async findOne(@Param('id', ParseIntPipe) id: number) {
     return this.suppliersService.findOne(id);
   }
 
   @Post()
+  @UserHasPermission({
+    permission: {
+      supplier: ['create'],
+    },
+  })
   async create(@Body() createSupplierDto: CreateSupplierDto) {
     return this.suppliersService.create(createSupplierDto);
   }
 
   @Patch(':id')
+  @UserHasPermission({
+    permission: {
+      supplier: ['update'],
+    },
+  })
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateSupplierDto: UpdateSupplierDto,
@@ -44,6 +65,11 @@ export class SuppliersController {
   }
 
   @Delete(':id')
+  @UserHasPermission({
+    permission: {
+      supplier: ['delete'],
+    },
+  })
   async remove(@Param('id', ParseIntPipe) id: number) {
     return this.suppliersService.remove(id);
   }

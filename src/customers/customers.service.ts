@@ -13,89 +13,23 @@ import { RedisService } from 'src/redis/redis.service';
 @Injectable()
 export class CustomerService {
   constructor(
-    private prisma: PrismaService,
+    private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
 
-  // async findAll(customerFilterDto: CustomerFilterDto) {
-  //   const {
-  //     page = 1,
-  //     limit = 10,
-  //     firstName,
-  //     lastName,
-  //     phoneNumber,
-  //     address,
-  //     orderStatus,
-  //   } = customerFilterDto;
+  private async invalidateCustomerCache() {
+    await this.redis.deleteByPattern('customers:list:*');
+  }
 
-  //   const pagination = getPagination(page, limit);
+  async create(createCustomerDto: CreateCustomerDto) {
+    const customer = await this.prisma.customer.create({
+      data: { ...createCustomerDto },
+    });
 
-  //   const where = {
-  //     ...(firstName && {
-  //       firstName: {
-  //         contains: firstName,
-  //         mode: 'insensitive' as const,
-  //       },
-  //     }),
+    await this.invalidateCustomerCache();
 
-  //     ...(lastName && {
-  //       lastName: {
-  //         contains: lastName,
-  //         mode: 'insensitive' as const,
-  //       },
-  //     }),
-
-  //     ...(phoneNumber && {
-  //       phoneNumber: {
-  //         contains: phoneNumber,
-  //       },
-  //     }),
-
-  //     ...(address && {
-  //       address: {
-  //         contains: address,
-  //         mode: 'insensitive' as const,
-  //       },
-  //     }),
-
-  //     ...(orderStatus && {
-  //       orders: {
-  //         some: {
-  //           orderStatus,
-  //         },
-  //       },
-  //     }),
-  //   };
-
-  //   const [total, data] = await Promise.all([
-  //     this.prisma.customer.count({
-  //       where,
-  //     }),
-
-  //     this.prisma.customer.findMany({
-  //       where,
-  //       skip: pagination.skip,
-  //       take: pagination.take,
-  //       orderBy: {
-  //         createdAt: 'desc',
-  //       },
-  //       include: {
-  //         orders: {
-  //           ...(orderStatus && {
-  //             where: {
-  //               orderStatus,
-  //             },
-  //           }),
-  //         },
-  //       },
-  //     }),
-  //   ]);
-
-  //   return {
-  //     data,
-  //     meta: getPaginationMeta(total, pagination.page, pagination.limit),
-  //   };
-  // }
+    return customer;
+  }
 
   async findAll(customerFilterDto: CustomerFilterDto) {
     const start = performance.now();
@@ -110,7 +44,6 @@ export class CustomerService {
       orderStatus,
     } = customerFilterDto;
 
-    // 1. Cache key
     const cacheParams = {
       page,
       limit,
@@ -123,7 +56,6 @@ export class CustomerService {
 
     const cacheKey = `customers:list:${JSON.stringify(cacheParams)}`;
 
-    // 2. Redis cache
     const cached = await this.redis.get(cacheKey);
 
     if (cached !== null) {
@@ -139,64 +71,34 @@ export class CustomerService {
 
     console.log(`Redis CACHE MISS: ${cacheKey}`);
 
-    // 3. Pagination
     const pagination = getPagination(page, limit);
 
-    // 4. WHERE
     const where: Prisma.CustomerWhereInput = {
       ...(firstName && {
-        firstName: {
-          contains: firstName,
-          mode: 'insensitive',
-        },
+        firstName: { contains: firstName, mode: 'insensitive' },
       }),
-
       ...(lastName && {
-        lastName: {
-          contains: lastName,
-          mode: 'insensitive',
-        },
+        lastName: { contains: lastName, mode: 'insensitive' },
       }),
-
       ...(phoneNumber && {
-        phoneNumber: {
-          contains: phoneNumber,
-        },
+        phoneNumber: { contains: phoneNumber },
       }),
-
       ...(address && {
-        address: {
-          contains: address,
-          mode: 'insensitive',
-        },
+        address: { contains: address, mode: 'insensitive' },
       }),
-
       ...(orderStatus && {
-        orders: {
-          some: {
-            orderStatus,
-          },
-        },
+        orders: { some: { orderStatus } },
       }),
     };
 
-    // 5. Database queries
     const [total, customers] = await Promise.all([
-      this.prisma.customer.count({
-        where,
-      }),
-
+      this.prisma.customer.count({ where }),
       this.prisma.customer.findMany({
         relationLoadStrategy: 'query',
-
         where,
         skip: pagination.skip,
         take: pagination.take,
-
-        orderBy: {
-          createdAt: 'desc',
-        },
-
+        orderBy: { createdAt: 'desc' },
         select: {
           id: true,
           firstName: true,
@@ -205,23 +107,14 @@ export class CustomerService {
           address: true,
           createdAt: true,
           updatedAt: true,
-
           orders: {
-            ...(orderStatus && {
-              where: {
-                orderStatus,
-              },
-            }),
-
+            ...(orderStatus && { where: { orderStatus } }),
             select: {
               id: true,
               orderStatus: true,
               orderDate: true,
             },
-
-            orderBy: {
-              createdAt: 'desc',
-            },
+            orderBy: { createdAt: 'desc' },
             take: 1,
           },
         },
@@ -230,7 +123,6 @@ export class CustomerService {
 
     const queryEnd = performance.now();
 
-    // 6. Response
     const response = {
       data: customers,
       meta: getPaginationMeta(total, pagination.page, pagination.limit),
@@ -245,7 +137,6 @@ export class CustomerService {
       totalTime: `${(end - start).toFixed(2)}ms`,
     });
 
-    // 7. Save Redis cache (5 minutes)
     await this.redis.set(cacheKey, response, 300);
 
     return response;
@@ -258,11 +149,9 @@ export class CustomerService {
         orders: {
           include: {
             orderDetails: {
-              include: {
-                product: true, // optional but useful
-              },
+              include: { product: true },
             },
-            employee: true, // optional
+            employee: true,
           },
         },
       },
@@ -271,16 +160,6 @@ export class CustomerService {
     if (!customer) {
       throw new NotFoundException(`Customer with ID ${id} not found`);
     }
-
-    return customer;
-  }
-
-  async create(createCustomerDto: CreateCustomerDto) {
-    const customer = await this.prisma.customer.create({
-      data: {
-        ...createCustomerDto,
-      },
-    });
 
     return customer;
   }
@@ -294,10 +173,14 @@ export class CustomerService {
       throw new NotFoundException(`Customer with id ${id} not found`);
     }
 
-    return this.prisma.customer.update({
+    const customer = await this.prisma.customer.update({
       where: { id },
       data: updateCustomerDto,
     });
+
+    await this.invalidateCustomerCache();
+
+    return customer;
   }
 
   async remove(id: number) {
@@ -312,6 +195,8 @@ export class CustomerService {
     await this.prisma.customer.delete({
       where: { id },
     });
+
+    await this.invalidateCustomerCache();
 
     return {
       message: `Customer with id ${id} deleted successfully`,
