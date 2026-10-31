@@ -1,12 +1,7 @@
-import {
-  Controller,
-  Get,
-  Query,
-  DefaultValuePipe,
-  ParseIntPipe,
-} from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 
 import { MonitoringService } from './monitoring.service';
+import { PaginationDto } from 'src/common/utils/pagination.dto';
 
 @Controller('monitoring')
 export class MonitoringController {
@@ -18,26 +13,19 @@ export class MonitoringController {
   }
 
   @Get('recent-queries')
-  getRecentQueries(
-    @Query('limit', new DefaultValuePipe(20), ParseIntPipe)
-    limit: number,
-  ) {
-    return this.monitoringService.getRecentQueries(limit);
+  getRecentQueries(@Query() paginationDto: PaginationDto) {
+    return this.monitoringService.getRecentQueries(paginationDto);
   }
 
+  // Slow Queries
   @Get('slow-queries')
-  getSlowQueries(
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe)
-    limit: number,
-  ) {
-    return this.monitoringService.getSlowQueries(limit);
+  getSlowQueries(@Query() paginationDto: PaginationDto) {
+    return this.monitoringService.getSlowQueries(paginationDto);
   }
 
+  // Top Queries
   @Get('top-queries')
-  getTopQueries(
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe)
-    limit: number,
-  ) {
-    return this.monitoringService.getTopQueries(limit);
+  getTopQueries(@Query() paginationDto: PaginationDto) {
+    return this.monitoringService.getTopQueries(paginationDto);
   }
 }

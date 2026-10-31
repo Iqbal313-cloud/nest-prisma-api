@@ -25,11 +25,6 @@ export class AnalyticsController {
     return this.analyticsService.getOrderAnalytics();
   }
 
-  // @Get('orders/trends')
-  // getOrderTrends() {
-  //   return this.analyticsService.getOrderTrends();
-  // }
-
   @Get('orders/trends')
   getOrderTrends(@Query() query: OrderTrendsQueryDto) {
     return this.analyticsService.getOrderTrends(query.groupBy);

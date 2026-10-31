@@ -1,6 +1,11 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MonitoringSummary } from './monitoring.types';
+import {
+  getPagination,
+  getPaginationMeta,
+} from 'src/common/utils/pagination.util';
+import { PaginationDto } from 'src/common/utils/pagination.dto';
 
 /* eslint-disable */
 function serializeBigInt<T>(data: T): T {
@@ -106,11 +111,14 @@ export class MonitoringService {
   }
 
   // 1. Recent query activity
-  async getRecentQueries(limit = 20) {
-    try {
-      const safeLimit = Math.min(100, Math.max(1, limit));
 
-      const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
+  async getRecentQueries(paginationDto: PaginationDto) {
+    try {
+      const { page = 1, limit = 10 } = paginationDto;
+      const { skip, take } = getPagination(page, limit);
+
+      const [rows, countResult] = await Promise.all([
+        this.prisma.$queryRaw<Record<string, unknown>[]>`
         SELECT
           bucket_start_time AS time,
           username,
@@ -126,12 +134,22 @@ export class MonitoringService {
         FROM pg_stat_monitor
         WHERE datname = current_database()
         ORDER BY bucket_start_time DESC NULLS LAST, bucket DESC
-        LIMIT ${safeLimit}
-      `;
+        LIMIT ${take}
+        OFFSET ${skip}
+      `,
+
+        this.prisma.$queryRaw<{ total: bigint }[]>`
+        SELECT COUNT(*) AS total
+        FROM pg_stat_monitor
+        WHERE datname = current_database()
+      `,
+      ]);
+
+      const total = Number(countResult[0]?.total ?? 0);
 
       return serializeBigInt({
         data: rows,
-        count: rows.length,
+        meta: getPaginationMeta(total, page, limit),
       });
     } catch {
       throw new ServiceUnavailableException(
@@ -141,11 +159,14 @@ export class MonitoringService {
   }
 
   // 2. Slowest queries
-  async getSlowQueries(limit = 10) {
-    try {
-      const safeLimit = Math.min(100, Math.max(1, limit));
 
-      const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
+  async getSlowQueries(paginationDto: PaginationDto) {
+    try {
+      const { page = 1, limit = 10 } = paginationDto;
+      const { skip, take } = getPagination(page, limit);
+
+      const [rows, countResult] = await Promise.all([
+        this.prisma.$queryRaw<Record<string, unknown>[]>`
         SELECT
           queryid::text AS queryid,
           query,
@@ -161,21 +182,41 @@ export class MonitoringService {
           WHERE datname = current_database()
         )
         ORDER BY max_exec_time DESC NULLS LAST
-        LIMIT ${safeLimit}
-      `;
+        LIMIT ${take}
+        OFFSET ${skip}
+      `,
 
-      return serializeBigInt({ data: rows });
+        this.prisma.$queryRaw<{ total: bigint }[]>`
+        SELECT COUNT(*) AS total
+        FROM pg_stat_statements
+        WHERE dbid = (
+          SELECT oid
+          FROM pg_database
+          WHERE datname = current_database()
+        )
+      `,
+      ]);
+
+      const total = Number(countResult[0]?.total ?? 0);
+
+      return serializeBigInt({
+        data: rows,
+        meta: getPaginationMeta(total, page, limit),
+      });
     } catch {
       throw new ServiceUnavailableException('Unable to retrieve slow queries');
     }
   }
 
   // 3. Most frequently executed queries
-  async getTopQueries(limit = 10) {
-    try {
-      const safeLimit = Math.min(100, Math.max(1, limit));
 
-      const rows = await this.prisma.$queryRaw<Record<string, unknown>[]>`
+  async getTopQueries(paginationDto: PaginationDto) {
+    try {
+      const { page = 1, limit = 10 } = paginationDto;
+      const { skip, take } = getPagination(page, limit);
+
+      const [rows, countResult] = await Promise.all([
+        this.prisma.$queryRaw<Record<string, unknown>[]>`
         SELECT
           queryid::text AS queryid,
           query,
@@ -191,10 +232,27 @@ export class MonitoringService {
           WHERE datname = current_database()
         )
         ORDER BY calls DESC
-        LIMIT ${safeLimit}
-      `;
+        LIMIT ${take}
+        OFFSET ${skip}
+      `,
 
-      return serializeBigInt({ data: rows });
+        this.prisma.$queryRaw<{ total: bigint }[]>`
+        SELECT COUNT(*) AS total
+        FROM pg_stat_statements
+        WHERE dbid = (
+          SELECT oid
+          FROM pg_database
+          WHERE datname = current_database()
+        )
+      `,
+      ]);
+
+      const total = Number(countResult[0]?.total ?? 0);
+
+      return serializeBigInt({
+        data: rows,
+        meta: getPaginationMeta(total, page, limit),
+      });
     } catch {
       throw new ServiceUnavailableException('Unable to retrieve top queries');
     }

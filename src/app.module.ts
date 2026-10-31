@@ -16,6 +16,7 @@ import { LoggerMiddleware } from './middleware/logger.middleware';
 import { RedisModule } from './redis/redis.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
     ThrottlerModule.forRoot([
       {
         ttl: 60_000,
-        limit: 100,
+        limit: 10000,
       },
     ]),
 
@@ -39,6 +40,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
     RedisModule,
     AnalyticsModule,
     MonitoringModule,
+    AuthModule,
   ],
   providers: [
     {
