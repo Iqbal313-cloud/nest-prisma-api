@@ -1,6 +1,8 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { admin as adminPlugin } from 'better-auth/plugins';
+import { createAdminRoleProtection } from './admin-role-protection';
+import { sendResetEmail } from './email';
 
 import { PrismaClient } from '../generated/prisma/client';
 import {
@@ -34,6 +36,17 @@ export function createAuth(prisma: PrismaClient) {
 
     emailAndPassword: {
       enabled: true,
+      resetPasswordTokenExpiresIn: 30 * 60,
+
+      revokeSessionsOnPasswordReset: true,
+
+      sendResetPassword: async ({ user, url }) => {
+        await sendResetEmail({
+          email: user.email,
+          name: user.name,
+          url,
+        });
+      },
     },
 
     socialProviders: {
@@ -53,6 +66,10 @@ export function createAuth(prisma: PrismaClient) {
         enabled: true,
         updateEmailWithoutVerification: true,
       },
+    },
+
+    hooks: {
+      before: createAdminRoleProtection(prisma),
     },
 
     plugins: [
