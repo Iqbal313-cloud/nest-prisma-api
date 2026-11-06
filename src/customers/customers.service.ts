@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -21,9 +25,26 @@ export class CustomerService {
     await this.redis.deleteByPattern('customers:list:*');
   }
 
-  async create(createCustomerDto: CreateCustomerDto) {
+  async create(createCustomerDto: CreateCustomerDto, userId: string) {
     const customer = await this.prisma.customer.create({
-      data: { ...createCustomerDto },
+      data: {
+        ...createCustomerDto,
+        createdById: userId,
+      },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        updatedBy: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
 
     await this.invalidateCustomerCache();
@@ -42,8 +63,11 @@ export class CustomerService {
       phoneNumber,
       address,
       orderStatus,
+      createdByName,
+      updatedByName,
     } = customerFilterDto;
 
+    // Redis cache parameters
     const cacheParams = {
       page,
       limit,
@@ -52,6 +76,8 @@ export class CustomerService {
       phoneNumber: phoneNumber || null,
       address: address || null,
       orderStatus: orderStatus || null,
+      createdByName: createdByName || null,
+      updatedByName: updatedByName || null,
     };
 
     const cacheKey = `customers:list:${JSON.stringify(cacheParams)}`;
@@ -73,32 +99,81 @@ export class CustomerService {
 
     const pagination = getPagination(page, limit);
 
+    // Build Prisma filters
     const where: Prisma.CustomerWhereInput = {
       ...(firstName && {
-        firstName: { contains: firstName, mode: 'insensitive' },
+        firstName: {
+          contains: firstName,
+          mode: 'insensitive',
+        },
       }),
+
       ...(lastName && {
-        lastName: { contains: lastName, mode: 'insensitive' },
+        lastName: {
+          contains: lastName,
+          mode: 'insensitive',
+        },
       }),
+
       ...(phoneNumber && {
-        phoneNumber: { contains: phoneNumber },
+        phoneNumber: {
+          contains: phoneNumber,
+        },
       }),
+
       ...(address && {
-        address: { contains: address, mode: 'insensitive' },
+        address: {
+          contains: address,
+          mode: 'insensitive',
+        },
       }),
+
       ...(orderStatus && {
-        orders: { some: { orderStatus } },
+        orders: {
+          some: {
+            orderStatus,
+          },
+        },
+      }),
+
+      // Filter by creator name
+      ...(createdByName && {
+        createdBy: {
+          is: {
+            name: {
+              contains: createdByName,
+              mode: 'insensitive',
+            },
+          },
+        },
+      }),
+
+      // Filter by updater name
+      ...(updatedByName && {
+        updatedBy: {
+          is: {
+            name: {
+              contains: updatedByName,
+              mode: 'insensitive',
+            },
+          },
+        },
       }),
     };
 
     const [total, customers] = await Promise.all([
-      this.prisma.customer.count({ where }),
+      this.prisma.customer.count({
+        where,
+      }),
+
       this.prisma.customer.findMany({
         relationLoadStrategy: 'query',
         where,
         skip: pagination.skip,
         take: pagination.take,
-        orderBy: { createdAt: 'desc' },
+        orderBy: {
+          createdAt: 'desc',
+        },
         select: {
           id: true,
           firstName: true,
@@ -107,14 +182,34 @@ export class CustomerService {
           address: true,
           createdAt: true,
           updatedAt: true,
+
+          // Audit information
+          createdBy: {
+            select: {
+              name: true,
+            },
+          },
+
+          updatedBy: {
+            select: {
+              name: true,
+            },
+          },
+
           orders: {
-            ...(orderStatus && { where: { orderStatus } }),
+            ...(orderStatus && {
+              where: {
+                orderStatus,
+              },
+            }),
             select: {
               id: true,
               orderStatus: true,
               orderDate: true,
             },
-            orderBy: { createdAt: 'desc' },
+            orderBy: {
+              createdAt: 'desc',
+            },
             take: 1,
           },
         },
@@ -146,6 +241,16 @@ export class CustomerService {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+        updatedBy: {
+          select: {
+            name: true,
+          },
+        },
         orders: {
           include: {
             orderDetails: {
@@ -164,7 +269,11 @@ export class CustomerService {
     return customer;
   }
 
-  async update(id: number, updateCustomerDto: UpdateCustomerDto) {
+  async update(
+    id: number,
+    updateCustomerDto: UpdateCustomerDto,
+    userId: string,
+  ) {
     const existingCustomer = await this.prisma.customer.findUnique({
       where: { id },
     });
@@ -175,7 +284,24 @@ export class CustomerService {
 
     const customer = await this.prisma.customer.update({
       where: { id },
-      data: updateCustomerDto,
+      data: {
+        ...updateCustomerDto,
+        updatedById: userId,
+      },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        updatedBy: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
 
     await this.invalidateCustomerCache();
@@ -192,9 +318,36 @@ export class CustomerService {
       throw new NotFoundException(`Customer with id ${id} not found`);
     }
 
-    await this.prisma.customer.delete({
-      where: { id },
+    // Check whether this customer has any orders
+    const orderCount = await this.prisma.orders.count({
+      where: {
+        customerId: id,
+      },
     });
+
+    if (orderCount > 0) {
+      throw new ConflictException(
+        `Cannot delete customer. This customer has ${orderCount} associated order(s).`,
+      );
+    }
+
+    try {
+      await this.prisma.customer.delete({
+        where: { id },
+      });
+    } catch (error) {
+      // Database-level protection against concurrent order creation
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2003'
+      ) {
+        throw new ConflictException(
+          'Cannot delete customer because associated orders exist.',
+        );
+      }
+
+      throw error;
+    }
 
     await this.invalidateCustomerCache();
 

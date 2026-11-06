@@ -15,7 +15,7 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { CustomerFilterDto } from './dto/customer-filter.dto';
 import { UserHasPermission } from '@thallesp/nestjs-better-auth';
-
+import { Session, UserSession } from '@thallesp/nestjs-better-auth';
 @ApiTags('Customers')
 @Controller('customers')
 export class CustomerController {
@@ -27,8 +27,12 @@ export class CustomerController {
       customer: ['create'],
     },
   })
-  create(@Body() createCustomerDto: CreateCustomerDto) {
-    return this.customerService.create(createCustomerDto);
+  create(
+    @Body() createCustomerDto: CreateCustomerDto,
+    @Session() session: UserSession,
+  ) {
+    console.log('SESSION:', session);
+    return this.customerService.create(createCustomerDto, session.user.id);
   }
 
   @Get()
@@ -60,8 +64,9 @@ export class CustomerController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCustomerDto: UpdateCustomerDto,
+    @Session() session: UserSession,
   ) {
-    return this.customerService.update(id, updateCustomerDto);
+    return this.customerService.update(id, updateCustomerDto, session.user.id);
   }
 
   @Delete(':id')

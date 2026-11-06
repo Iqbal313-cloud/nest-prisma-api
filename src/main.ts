@@ -1,6 +1,4 @@
-// import * as dns from 'node:dns';
 import * as net from 'node:net';
-// dns.setDefaultResultOrder('ipv4first');
 net.setDefaultAutoSelectFamilyAttemptTimeout(5000);
 
 import { NestFactory } from '@nestjs/core';

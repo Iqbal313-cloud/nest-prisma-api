@@ -4,8 +4,8 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
   previewFeatures = ["relationJoins"]
 }
 
@@ -14,24 +14,30 @@ datasource db {
 }
 
 model Category {
-  id           Int        @id @default(autoincrement())
+  id           Int     @id @default(autoincrement())
   categoryName String?
   description  String?
 
   parentId Int?
-  parent   Category? @relation("CategoryTree", fields: [parentId], references: [id],onDelete: Cascade)
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
   children Category[] @relation("CategoryTree")
 
   products Product[]
 
-  @@index([parentId])
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  createdById String?
+  updatedById String?
+
+  createdBy User? @relation("CategoryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("CategoryUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([parentId])
 }
 
 model Customer {
-  id          Int      @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   firstName   String?
   lastName    String?
   phoneNumber String?
@@ -41,10 +47,16 @@ model Customer {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  createdById String?
+  updatedById String?
+
+  createdBy User? @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("CustomerUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 }
 
 model Employee {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   firstName String
   lastName  String
   birthDate DateTime?
@@ -55,6 +67,12 @@ model Employee {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  createdById String?
+  updatedById String?
+
+  createdBy User? @relation("EmployeeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("EmployeeUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 }
 
 model Supplier {
@@ -71,52 +89,72 @@ model Supplier {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  createdById String?
+  updatedById String?
+
+  createdBy User? @relation("SupplierCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("SupplierUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 }
 
 model Product {
-  id              Int      @id @default(autoincrement())
-  productName     String
-  slug             String  @unique
-  sku              String  @unique
+  id               Int      @id @default(autoincrement())
+  productName      String
+  slug             String   @unique
+  sku              String   @unique
   shortDescription String?
   description      String?
-  quantityPerUnit String?
-  unitPrice       Decimal? @db.Decimal(10, 2)
-  unitsInStock    Int?
-  unitsOnOrder    Int?
-  discontinued    Boolean?
+  quantityPerUnit  String?
+  unitPrice        Decimal? @db.Decimal(10, 2)
+  unitsInStock     Int?
+  unitsOnOrder     Int?
+  discontinued     Boolean?
 
   supplierId Int?
-  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 
   categoryId Int?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   orderDetails OrderDetails[]
-  @@index([supplierId])
-  @@index([categoryId])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  createdById String?
+  updatedById String?
+
+  createdBy User? @relation("ProductCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("ProductUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([supplierId])
+  @@index([categoryId])
 }
 
 model Orders {
-  id          Int          @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   orderDate   DateTime?
-  orderStatus OrderStatus  @default(PENDING)
+  orderStatus OrderStatus @default(PENDING)
 
   customerId Int?
-  customer   Customer? @relation(fields: [customerId], references: [id])
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   employeeId Int?
-  employee   Employee? @relation(fields: [employeeId], references: [id])
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
 
   orderDetails OrderDetails[]
-  @@index([customerId])
-  @@index([employeeId])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  createdById String?
+  updatedById String?
+
+  createdBy User? @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("OrderUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([employeeId])
   @@index([createdAt])
 }
 
@@ -126,8 +164,8 @@ model OrderDetails {
   unitPrice Decimal @db.Decimal(10, 2)
   discount  Decimal @db.Decimal(10, 2)
 
-  orderId   Int
-  orders    Orders  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId Int
+  orders  Orders @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   productId Int
   product   Product @relation(fields: [productId], references: [id])
@@ -148,23 +186,47 @@ enum OrderStatus {
 }
 
 model User {
-  id            String    @id
+  id            String  @id
   name          String
-  email         String    @unique
+  email         String  @unique
   emailVerified Boolean
   image         String?
 
   // Admin plugin fields
-  role          String?
-  banned Boolean? @default(false)
-  banReason     String?
-  banExpires    DateTime? @db.Timestamptz(3)
+  role       String?
+  banned     Boolean?  @default(false)
+  banReason  String?
+  banExpires DateTime? @db.Timestamptz(3)
 
-  createdAt     DateTime  @db.Timestamptz(3)
-  updatedAt     DateTime  @db.Timestamptz(3)
+  //Customer
 
-  sessions      Session[]
-  accounts      Account[]
+  createdAt       DateTime   @db.Timestamptz(3)
+  updatedAt       DateTime   @db.Timestamptz(3)
+  customerCreated Customer[] @relation("CustomerCreatedBy")
+  customerUpdated Customer[] @relation("CustomerUpdatedBy")
+
+  // Employee
+  employeeCreated Employee[] @relation("EmployeeCreatedBy")
+  employeeUpdated Employee[] @relation("EmployeeUpdatedBy")
+
+  // Supplier
+  supplierCreated Supplier[] @relation("SupplierCreatedBy")
+  supplierUpdated Supplier[] @relation("SupplierUpdatedBy")
+
+  // Category
+  categoryCreated Category[] @relation("CategoryCreatedBy")
+  categoryUpdated Category[] @relation("CategoryUpdatedBy")
+
+  // Product
+  productCreated Product[] @relation("ProductCreatedBy")
+  productUpdated Product[] @relation("ProductUpdatedBy")
+
+  // Orders
+  orderCreated Orders[] @relation("OrderCreatedBy")
+  orderUpdated Orders[] @relation("OrderUpdatedBy")
+
+  sessions Session[]
+  accounts Account[]
 
   @@map("user")
 }
@@ -177,7 +239,7 @@ model Session {
   ipAddress String?
   userAgent String?
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   impersonatedBy String?
 
   createdAt DateTime @db.Timestamptz(3)
@@ -200,10 +262,10 @@ model Account {
   idToken               String?
   password              String?
 
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt             DateTime  @db.Timestamptz(3)
-  updatedAt             DateTime  @db.Timestamptz(3)
+  createdAt DateTime @db.Timestamptz(3)
+  updatedAt DateTime @db.Timestamptz(3)
 
   @@index([userId], map: "account_userId_idx")
   @@map("account")

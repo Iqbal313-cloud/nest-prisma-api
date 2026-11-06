@@ -44,4 +44,12 @@ export class CustomerFilterDto extends PaginationDto {
   @IsOptional()
   @IsEnum(OrderStatus)
   orderStatus?: OrderStatus;
+
+  @IsOptional()
+  @IsString()
+  createdByName?: string;
+
+  @IsOptional()
+  @IsString()
+  updatedByName?: string;
 }
