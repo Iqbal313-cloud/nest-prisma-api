@@ -9,16 +9,33 @@ export class CategoriesService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(): Promise<any[]> {
-    const categories = await this.prisma.category.findMany();
+    const categories = await this.prisma.category.findMany({
+      include: {
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+        updatedBy: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
 
     // Helper function to recursively build the tree
     const buildTree = (parentId: number | null): any[] => {
       return categories
         .filter((category) => category.parentId === parentId)
-        .map((category) => ({
-          ...category,
-          children: buildTree(category.id),
-        }));
+        .map((category) => {
+          const { createdById, updatedById, ...categoryData } = category;
+
+          return {
+            ...categoryData,
+            children: buildTree(category.id),
+          };
+        });
     };
 
     // Start from root categories (parentId = null)
@@ -26,32 +43,51 @@ export class CategoriesService {
   }
 
   async findOneWithChildren(id: number): Promise<any | null> {
-    const categories = await this.prisma.category.findMany();
-
-    // build lookup for faster access (optional but better performance)
-    const map = new Map<number, any>();
-
-    categories.forEach((cat) => {
-      map.set(cat.id, { ...cat, children: [] });
+    const categories = await this.prisma.category.findMany({
+      include: {
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+        updatedBy: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
 
-    // build tree structure
-    categories.forEach((cat) => {
-      if (cat.parentId !== null) {
-        const parent = map.get(cat.parentId);
+    const map = new Map<number, any>();
+
+    categories.forEach((category) => {
+      const { createdById, updatedById, ...categoryData } = category;
+
+      map.set(category.id, {
+        ...categoryData,
+        children: [],
+      });
+    });
+
+    categories.forEach((category) => {
+      if (category.parentId !== null) {
+        const parent = map.get(category.parentId);
+
         if (parent) {
-          parent.children.push(map.get(cat.id));
+          parent.children.push(map.get(category.id));
         }
       }
     });
 
-    return map.get(id) || null;
+    return map.get(id) ?? null;
   }
 
-  async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
+  async create(
+    createCategoryDto: CreateCategoryDto,
+    userId: string,
+  ): Promise<Category> {
     const { categoryName, description, parentId } = createCategoryDto;
 
-    // Optional safety check for parent
     if (parentId) {
       const parentExists = await this.prisma.category.findUnique({
         where: { id: parentId },
@@ -67,6 +103,16 @@ export class CategoriesService {
         categoryName,
         description,
         parentId,
+        createdById: userId,
+        updatedById: userId,
+      },
+      include: {
+        createdBy: {
+          select: { name: true },
+        },
+        updatedBy: {
+          select: { name: true },
+        },
       },
     });
   }
@@ -74,10 +120,10 @@ export class CategoriesService {
   async update(
     id: number,
     updateCategoryDto: UpdateCategoryDto,
+    userId: string,
   ): Promise<Category> {
     const { categoryName, description, parentId } = updateCategoryDto;
 
-    // Check if category exists
     const categoryExists = await this.prisma.category.findUnique({
       where: { id },
     });
@@ -86,7 +132,6 @@ export class CategoriesService {
       throw new BadRequestException('Category not found');
     }
 
-    // Optional safety check for parent
     if (parentId) {
       const parentExists = await this.prisma.category.findUnique({
         where: { id: parentId },
@@ -103,6 +148,15 @@ export class CategoriesService {
         categoryName,
         description,
         parentId,
+        updatedById: userId,
+      },
+      include: {
+        createdBy: {
+          select: { name: true },
+        },
+        updatedBy: {
+          select: { name: true },
+        },
       },
     });
   }

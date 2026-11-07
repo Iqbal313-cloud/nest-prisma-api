@@ -12,6 +12,7 @@ import {
 @Injectable()
 export class SuppliersService {
   constructor(private readonly prisma: PrismaService) {}
+
   async findAll(paginationDto: SupplierFilterDto) {
     const page = paginationDto.page ?? 1;
     const limit = paginationDto.limit ?? 10;
@@ -25,6 +26,8 @@ export class SuppliersService {
       country,
       phone,
       postalCode,
+      createdByName,
+      updatedByName,
     } = paginationDto;
 
     const where: Prisma.SupplierWhereInput = {
@@ -76,6 +79,24 @@ export class SuppliersService {
           mode: 'insensitive',
         },
       }),
+
+      ...(createdByName?.trim() && {
+        createdBy: {
+          name: {
+            contains: createdByName.trim(),
+            mode: 'insensitive',
+          },
+        },
+      }),
+
+      ...(updatedByName?.trim() && {
+        updatedBy: {
+          name: {
+            contains: updatedByName.trim(),
+            mode: 'insensitive',
+          },
+        },
+      }),
     };
 
     const [data, total] = await Promise.all([
@@ -112,6 +133,16 @@ export class SuppliersService {
               products: true,
             },
           },
+          createdBy: {
+            select: {
+              name: true,
+            },
+          },
+          updatedBy: {
+            select: {
+              name: true,
+            },
+          },
         },
       }),
 
@@ -141,6 +172,17 @@ export class SuppliersService {
             products: true,
           },
         },
+
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+        updatedBy: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
 
@@ -151,16 +193,21 @@ export class SuppliersService {
     return supplier;
   }
 
-  async create(createSupplierDto: CreateSupplierDto) {
+  async create(createSupplierDto: CreateSupplierDto, userId: string) {
     const supplier = await this.prisma.supplier.create({
       data: {
         ...createSupplierDto,
+        createdById: userId,
       },
     });
     return supplier;
   }
 
-  async update(id: number, updateSupplierDto: UpdateSupplierDto) {
+  async update(
+    id: number,
+    updateSupplierDto: UpdateSupplierDto,
+    userId: string,
+  ) {
     // Check if supplier exists
     const existingSupplier = await this.prisma.supplier.findUnique({
       where: { id },
@@ -175,6 +222,7 @@ export class SuppliersService {
       where: { id },
       data: {
         ...updateSupplierDto,
+        updatedById: userId,
       },
     });
 

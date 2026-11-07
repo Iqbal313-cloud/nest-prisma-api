@@ -15,6 +15,7 @@ import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { SupplierFilterDto } from './dto/supplier-filter.dto';
 import { UserHasPermission } from '@thallesp/nestjs-better-auth';
+import { Session, UserSession } from '@thallesp/nestjs-better-auth';
 
 @ApiTags('Suppliers')
 @Controller('suppliers')
@@ -47,8 +48,11 @@ export class SuppliersController {
       supplier: ['create'],
     },
   })
-  async create(@Body() createSupplierDto: CreateSupplierDto) {
-    return this.suppliersService.create(createSupplierDto);
+  async create(
+    @Body() createSupplierDto: CreateSupplierDto,
+    @Session() session: UserSession,
+  ) {
+    return this.suppliersService.create(createSupplierDto, session.user.id);
   }
 
   @Patch(':id')
@@ -60,8 +64,9 @@ export class SuppliersController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateSupplierDto: UpdateSupplierDto,
+    @Session() session: UserSession,
   ) {
-    return this.suppliersService.update(id, updateSupplierDto);
+    return this.suppliersService.update(id, updateSupplierDto, session.user.id);
   }
 
   @Delete(':id')

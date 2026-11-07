@@ -38,4 +38,14 @@ export class SupplierFilterDto extends PaginationDto {
   @IsOptional()
   @IsString()
   postalCode?: string;
+
+  @ApiPropertyOptional({ example: 'Iqbal' })
+  @IsOptional()
+  @IsString()
+  createdByName?: string;
+
+  @ApiPropertyOptional({ example: 'Iqbal' })
+  @IsOptional()
+  @IsString()
+  updatedByName?: string;
 }

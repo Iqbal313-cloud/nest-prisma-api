@@ -12,7 +12,7 @@ import {
 } from 'src/common/utils/pagination.util';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/updateOrder.dto';
-
+/* eslint-disable */
 @Injectable()
 export class OrdersService {
   constructor(
@@ -41,6 +41,8 @@ export class OrdersService {
       productName,
       fromDate,
       toDate,
+      createdByName,
+      updatedByName,
     } = params;
 
     // =========================================================
@@ -61,9 +63,11 @@ export class OrdersService {
       productName: productName || null,
       fromDate: fromDate || null,
       toDate: toDate || null,
+      createdByName: createdByName || null,
+      updatedByName: updatedByName || null,
     };
 
-    const cacheKey = `orders:list:${JSON.stringify(cacheParams)}`;
+    const cacheKey = `orders:list:v2:${JSON.stringify(cacheParams)}`;
 
     // =========================================================
     // Redis cache
@@ -118,32 +122,36 @@ export class OrdersService {
       // Customer filters
       // =======================================================
 
-      ...(customerName && {
-        customer: {
-          OR: [
-            {
-              firstName: {
-                contains: customerName,
-                mode: 'insensitive',
-              },
-            },
-            {
-              lastName: {
-                contains: customerName,
-                mode: 'insensitive',
-              },
-            },
-          ],
-        },
-      }),
+      ...(customerName || customerPhone
+        ? {
+            customer: {
+              is: {
+                ...(customerName && {
+                  OR: [
+                    {
+                      firstName: {
+                        contains: customerName,
+                        mode: 'insensitive',
+                      },
+                    },
+                    {
+                      lastName: {
+                        contains: customerName,
+                        mode: 'insensitive',
+                      },
+                    },
+                  ],
+                }),
 
-      ...(customerPhone && {
-        customer: {
-          phoneNumber: {
-            contains: customerPhone,
-          },
-        },
-      }),
+                ...(customerPhone && {
+                  phoneNumber: {
+                    contains: customerPhone,
+                  },
+                }),
+              },
+            },
+          }
+        : {}),
 
       // =======================================================
       // Employee filter
@@ -151,20 +159,22 @@ export class OrdersService {
 
       ...(employeeName && {
         employee: {
-          OR: [
-            {
-              firstName: {
-                contains: employeeName,
-                mode: 'insensitive',
+          is: {
+            OR: [
+              {
+                firstName: {
+                  contains: employeeName,
+                  mode: 'insensitive',
+                },
               },
-            },
-            {
-              lastName: {
-                contains: employeeName,
-                mode: 'insensitive',
+              {
+                lastName: {
+                  contains: employeeName,
+                  mode: 'insensitive',
+                },
               },
-            },
-          ],
+            ],
+          },
         },
       }),
 
@@ -180,6 +190,36 @@ export class OrdersService {
                 contains: productName,
                 mode: 'insensitive',
               },
+            },
+          },
+        },
+      }),
+
+      // =======================================================
+      // Created By filter
+      // =======================================================
+
+      ...(createdByName && {
+        createdBy: {
+          is: {
+            name: {
+              contains: createdByName,
+              mode: 'insensitive',
+            },
+          },
+        },
+      }),
+
+      // =======================================================
+      // Updated By filter
+      // =======================================================
+
+      ...(updatedByName && {
+        updatedBy: {
+          is: {
+            name: {
+              contains: updatedByName,
+              mode: 'insensitive',
             },
           },
         },
@@ -214,44 +254,48 @@ export class OrdersService {
         OR: [
           {
             customer: {
-              OR: [
-                {
-                  firstName: {
-                    contains: search,
-                    mode: 'insensitive',
+              is: {
+                OR: [
+                  {
+                    firstName: {
+                      contains: search,
+                      mode: 'insensitive',
+                    },
                   },
-                },
-                {
-                  lastName: {
-                    contains: search,
-                    mode: 'insensitive',
+                  {
+                    lastName: {
+                      contains: search,
+                      mode: 'insensitive',
+                    },
                   },
-                },
-                {
-                  phoneNumber: {
-                    contains: search,
+                  {
+                    phoneNumber: {
+                      contains: search,
+                    },
                   },
-                },
-              ],
+                ],
+              },
             },
           },
 
           {
             employee: {
-              OR: [
-                {
-                  firstName: {
-                    contains: search,
-                    mode: 'insensitive',
+              is: {
+                OR: [
+                  {
+                    firstName: {
+                      contains: search,
+                      mode: 'insensitive',
+                    },
                   },
-                },
-                {
-                  lastName: {
-                    contains: search,
-                    mode: 'insensitive',
+                  {
+                    lastName: {
+                      contains: search,
+                      mode: 'insensitive',
+                    },
                   },
-                },
-              ],
+                ],
+              },
             },
           },
 
@@ -322,6 +366,18 @@ export class OrdersService {
                   productName: true,
                 },
               },
+            },
+          },
+
+          createdBy: {
+            select: {
+              name: true,
+            },
+          },
+
+          updatedBy: {
+            select: {
+              name: true,
             },
           },
         },
@@ -423,6 +479,18 @@ export class OrdersService {
           },
         },
 
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+
+        updatedBy: {
+          select: {
+            name: true,
+          },
+        },
+
         orderDetails: {
           select: {
             id: true,
@@ -470,7 +538,7 @@ export class OrdersService {
   // CREATE
   // =========================================================
 
-  async create(dto: CreateOrderDto) {
+  async create(dto: CreateOrderDto, userId: string) {
     const {
       customerFirstName,
       customerLastName,
@@ -498,6 +566,9 @@ export class OrdersService {
             lastName: customerLastName ?? null,
             phoneNumber: customerPhone,
             address: customerAddress ?? null,
+            createdBy: {
+              connect: { id: userId },
+            },
           },
         });
       }
@@ -506,6 +577,10 @@ export class OrdersService {
         data: {
           orderDate: orderDate ?? new Date(),
           orderStatus: orderStatus ?? 'PENDING',
+
+          createdBy: {
+            connect: { id: userId },
+          },
 
           customer: {
             connect: { id: customer.id },
@@ -533,6 +608,12 @@ export class OrdersService {
                 select: { productName: true },
               },
             },
+          },
+          createdBy: {
+            select: { name: true },
+          },
+          updatedBy: {
+            select: { name: true },
           },
         },
       });
@@ -563,7 +644,7 @@ export class OrdersService {
     };
   }
 
-  async update(id: number, dto: UpdateOrderDto) {
+  async update(id: number, dto: UpdateOrderDto, userId: string) {
     const {
       customerFirstName,
       customerLastName,
@@ -605,6 +686,9 @@ export class OrdersService {
               lastName: customerLastName ?? null,
               phoneNumber: customerPhone,
               address: customerAddress ?? null,
+              createdBy: {
+                connect: { id: userId },
+              },
             },
           });
         }
@@ -631,6 +715,7 @@ export class OrdersService {
               ...(customerAddress !== undefined
                 ? { address: customerAddress }
                 : {}),
+              updatedById: userId,
             },
           });
         }
@@ -644,6 +729,10 @@ export class OrdersService {
           customer: customerUpdate,
 
           employee: employeeId ? { connect: { id: employeeId } } : undefined,
+
+          updatedBy: {
+            connect: { id: userId },
+          },
 
           orderDetails: orderDetails
             ? {
@@ -668,6 +757,12 @@ export class OrdersService {
                 select: { productName: true },
               },
             },
+          },
+          createdBy: {
+            select: { name: true },
+          },
+          updatedBy: {
+            select: { name: true },
           },
         },
       });
@@ -700,11 +795,6 @@ export class OrdersService {
       })),
     };
   }
-
-  // =========================================================
-  // REMOVE
-  // =========================================================
-
   async remove(id: number) {
     console.log('========================================');
     console.log('DELETE ORDER START');

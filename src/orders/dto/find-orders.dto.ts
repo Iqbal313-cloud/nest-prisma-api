@@ -111,4 +111,20 @@ export class FindOrdersDto extends PaginationDto {
   @IsOptional()
   @IsISO8601()
   toDate?: string;
+
+  @ApiPropertyOptional({
+    example: 'Iqbal',
+    description: 'Filter orders by creator name',
+  })
+  @IsOptional()
+  @IsString()
+  createdByName?: string;
+
+  @ApiPropertyOptional({
+    example: 'Iqbal',
+    description: 'Filter orders by updater name',
+  })
+  @IsOptional()
+  @IsString()
+  updatedByName?: string;
 }

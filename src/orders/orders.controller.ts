@@ -17,6 +17,7 @@ import { UpdateOrderDto } from './dto/updateOrder.dto';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UserHasPermission } from '@thallesp/nestjs-better-auth';
+import { Session, UserSession } from '@thallesp/nestjs-better-auth';
 
 @Controller('orders')
 export class OrdersController {
@@ -49,8 +50,8 @@ export class OrdersController {
       order: ['create'],
     },
   })
-  async create(@Body() dto: CreateOrderDto) {
-    return this.ordersService.create(dto);
+  async create(@Body() dto: CreateOrderDto, @Session() session: UserSession) {
+    return this.ordersService.create(dto, session.user.id);
   }
 
   @Patch(':id')
@@ -63,10 +64,10 @@ export class OrdersController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateOrderDto,
+    @Session() session: UserSession,
   ) {
-    return this.ordersService.update(id, dto);
+    return this.ordersService.update(id, dto, session.user.id);
   }
-
   @Delete(':id')
   @UserHasPermission({
     permission: {

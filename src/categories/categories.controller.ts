@@ -15,9 +15,11 @@ import { Category } from 'src/generated/prisma/client';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { ApiTags } from '@nestjs/swagger';
-import { UserHasPermission } from '@thallesp/nestjs-better-auth';
-// import { CreateCategoryDto } from './dto/create-category.dto';
-// import { UpdateCategoryDto } from './dto/update-category.dto';
+import {
+  UserHasPermission,
+  Session,
+  UserSession,
+} from '@thallesp/nestjs-better-auth';
 
 @ApiTags('Categories')
 @Controller('categories')
@@ -68,8 +70,9 @@ export class CategoriesController {
   })
   async create(
     @Body() createCategoryDto: CreateCategoryDto,
+    @Session() session: UserSession,
   ): Promise<Category> {
-    return this.categoriesService.create(createCategoryDto);
+    return this.categoriesService.create(createCategoryDto, session.user.id);
   }
 
   @Patch(':id')
@@ -81,8 +84,13 @@ export class CategoriesController {
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCategoryDto: UpdateCategoryDto,
+    @Session() session: UserSession,
   ): Promise<Category> {
-    return this.categoriesService.update(id, updateCategoryDto);
+    return this.categoriesService.update(
+      id,
+      updateCategoryDto,
+      session.user.id,
+    );
   }
 
   @Delete(':id')

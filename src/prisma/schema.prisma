@@ -198,10 +198,12 @@ model User {
   banReason  String?
   banExpires DateTime? @db.Timestamptz(3)
 
-  //Customer
+  
 
   createdAt       DateTime   @db.Timestamptz(3)
   updatedAt       DateTime   @db.Timestamptz(3)
+
+  //Customer
   customerCreated Customer[] @relation("CustomerCreatedBy")
   customerUpdated Customer[] @relation("CustomerUpdatedBy")
 

@@ -87,4 +87,20 @@ export class ProductFilterDto extends PaginationDto {
   @IsNumber()
   @Min(0)
   maxPrice?: number;
+
+  @ApiPropertyOptional({
+    example: 'Iqbal',
+    description: 'Filter products by creator name',
+  })
+  @IsOptional()
+  @IsString()
+  createdByName?: string;
+
+  @ApiPropertyOptional({
+    example: 'Iqbal',
+    description: 'Filter products by updater name',
+  })
+  @IsOptional()
+  @IsString()
+  updatedByName?: string;
 }

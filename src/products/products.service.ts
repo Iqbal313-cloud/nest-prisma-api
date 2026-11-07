@@ -96,6 +96,18 @@ export class ProductsService {
             },
           },
 
+          createdBy: {
+            select: {
+              name: true,
+            },
+          },
+
+          updatedBy: {
+            select: {
+              name: true,
+            },
+          },
+
           createdAt: true,
           updatedAt: true,
         },
@@ -172,6 +184,8 @@ export class ProductsService {
       discontinued,
       minPrice,
       maxPrice,
+      createdByName,
+      updatedByName,
     } = filterDto;
 
     return {
@@ -219,6 +233,24 @@ export class ProductsService {
           }),
         },
       }),
+
+      ...(createdByName?.trim() && {
+        createdBy: {
+          name: {
+            contains: createdByName.trim(),
+            mode: 'insensitive' as const,
+          },
+        },
+      }),
+
+      ...(updatedByName?.trim() && {
+        updatedBy: {
+          name: {
+            contains: updatedByName.trim(),
+            mode: 'insensitive' as const,
+          },
+        },
+      }),
     };
   }
 
@@ -234,7 +266,9 @@ export class ProductsService {
       filterDto.supplierId !== undefined ||
       filterDto.discontinued !== undefined ||
       filterDto.minPrice !== undefined ||
-      filterDto.maxPrice !== undefined;
+      filterDto.maxPrice !== undefined ||
+      filterDto.createdByName?.trim() ||
+      filterDto.updatedByName?.trim();
 
     if (!hasFilter) {
       throw new BadRequestException('CSV export requires at least one filter');
@@ -262,6 +296,8 @@ export class ProductsService {
         'Discontinued',
         'Category',
         'Supplier',
+        'Created By',
+        'Updated By',
         'Created At',
         'Updated At',
       ],
@@ -321,6 +357,18 @@ export class ProductsService {
             },
           },
 
+          createdBy: {
+            select: {
+              name: true,
+            },
+          },
+
+          updatedBy: {
+            select: {
+              name: true,
+            },
+          },
+
           createdAt: true,
           updatedAt: true,
         },
@@ -345,6 +393,8 @@ export class ProductsService {
           Discontinued: product.discontinued,
           Category: product.category?.categoryName ?? '',
           Supplier: product.supplier?.supplierName ?? '',
+          'Created By': product.createdBy?.name ?? '',
+          'Updated By': product.updatedBy?.name ?? '',
           'Created At': product.createdAt,
           'Updated At': product.updatedAt,
         });
@@ -393,6 +443,18 @@ export class ProductsService {
           },
         },
 
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+
+        updatedBy: {
+          select: {
+            name: true,
+          },
+        },
+
         createdAt: true,
         updatedAt: true,
       },
@@ -405,7 +467,7 @@ export class ProductsService {
     return product;
   }
 
-  async create(createProductDto: CreateProductDto) {
+  async create(createProductDto: CreateProductDto, userId: string) {
     const slug = await this.generateUniqueSlug(createProductDto.productName);
 
     const product = await this.prisma.product.create({
@@ -447,6 +509,12 @@ export class ProductsService {
             },
           },
         }),
+
+        createdBy: {
+          connect: {
+            id: userId,
+          },
+        },
       },
 
       select: {
@@ -476,6 +544,18 @@ export class ProductsService {
           },
         },
 
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+
+        updatedBy: {
+          select: {
+            name: true,
+          },
+        },
+
         createdAt: true,
         updatedAt: true,
       },
@@ -484,7 +564,7 @@ export class ProductsService {
     return product;
   }
 
-  async update(id: number, updateProductDto: UpdateProductDto) {
+  async update(id: number, updateProductDto: UpdateProductDto, userId: string) {
     const existingProduct = await this.prisma.product.findUnique({
       where: {
         id,
@@ -549,6 +629,12 @@ export class ProductsService {
             },
           },
         }),
+
+        updatedBy: {
+          connect: {
+            id: userId,
+          },
+        },
       },
 
       select: {
@@ -575,6 +661,18 @@ export class ProductsService {
           select: {
             id: true,
             supplierName: true,
+          },
+        },
+
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+
+        updatedBy: {
+          select: {
+            name: true,
           },
         },
 
