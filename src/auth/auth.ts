@@ -37,6 +37,14 @@ export function createAuth(prisma: PrismaClient) {
 
     trustedOrigins: getTrustedOrigins(),
 
+    advanced: {
+      defaultCookieAttributes: {
+        sameSite: 'none',
+        secure: true,
+        httpOnly: true,
+      },
+    },
+
     database: prismaAdapter(prisma, {
       provider: 'postgresql',
     }),
