@@ -16,6 +16,13 @@ import {
   viewer,
 } from './permissions';
 
+function getTrustedOrigins(): string[] {
+  return (process.env.TRUSTED_ORIGINS || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 export function createAuth(prisma: PrismaClient) {
   const secret = process.env.BETTER_AUTH_SECRET;
 
@@ -28,7 +35,7 @@ export function createAuth(prisma: PrismaClient) {
     baseURL: process.env.BETTER_AUTH_URL,
     secret,
 
-    trustedOrigins: ['http://localhost:5173'],
+    trustedOrigins: getTrustedOrigins(),
 
     database: prismaAdapter(prisma, {
       provider: 'postgresql',

@@ -9,7 +9,11 @@ import {
   Query,
   ParseIntPipe,
 } from '@nestjs/common';
-import { UserHasPermission } from '@thallesp/nestjs-better-auth';
+import {
+  UserHasPermission,
+  Session,
+  UserSession,
+} from '@thallesp/nestjs-better-auth';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -38,15 +42,17 @@ export class EmployeesController {
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.employeesService.findOne(id);
   }
-
   @Post()
   @UserHasPermission({
     permission: {
       employee: ['create'],
     },
   })
-  create(@Body() createEmployeeDto: CreateEmployeeDto) {
-    return this.employeesService.create(createEmployeeDto);
+  create(
+    @Body() createEmployeeDto: CreateEmployeeDto,
+    @Session() session: UserSession,
+  ) {
+    return this.employeesService.create(createEmployeeDto, session.user.id);
   }
 
   @Patch(':id')
@@ -58,8 +64,9 @@ export class EmployeesController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateEmployeeDto: UpdateEmployeeDto,
+    @Session() session: UserSession,
   ) {
-    return this.employeesService.update(id, updateEmployeeDto);
+    return this.employeesService.update(id, updateEmployeeDto, session.user.id);
   }
 
   @Delete(':id')

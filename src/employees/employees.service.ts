@@ -24,6 +24,8 @@ export class EmployeesService {
       orderId,
       orderDate,
       orderStatus,
+      createdBy,
+      updatedBy,
     } = filterDto;
 
     const pagination = getPagination(page, limit);
@@ -50,6 +52,28 @@ export class EmployeesService {
       }),
       ...(birthDate && { birthDate }),
 
+      ...(createdBy && {
+        createdBy: {
+          is: {
+            name: {
+              contains: createdBy,
+              mode: 'insensitive' as const,
+            },
+          },
+        },
+      }),
+
+      ...(updatedBy && {
+        updatedBy: {
+          is: {
+            name: {
+              contains: updatedBy,
+              mode: 'insensitive' as const,
+            },
+          },
+        },
+      }),
+
       ...(Object.keys(orderWhere).length > 0 && {
         orders: {
           some: orderWhere,
@@ -70,6 +94,19 @@ export class EmployeesService {
           birthDate: true,
           photoPath: true,
           notes: true,
+          createdAt: true,
+          updatedAt: true,
+          createdBy: {
+            select: {
+              name: true,
+            },
+          },
+
+          updatedBy: {
+            select: {
+              name: true,
+            },
+          },
 
           orders: {
             where: orderWhere,
@@ -101,7 +138,7 @@ export class EmployeesService {
 
   async findOne(id: number) {
     const employee = await this.prisma.employee.findUnique({
-      where: { id: Number(id) },
+      where: { id },
       select: {
         id: true,
         firstName: true,
@@ -109,6 +146,21 @@ export class EmployeesService {
         birthDate: true,
         photoPath: true,
         notes: true,
+        createdAt: true,
+        updatedAt: true,
+
+        createdBy: {
+          select: {
+            name: true,
+          },
+        },
+
+        updatedBy: {
+          select: {
+            name: true,
+          },
+        },
+
         orders: {
           select: {
             id: true,
@@ -116,6 +168,7 @@ export class EmployeesService {
             orderStatus: true,
           },
         },
+
         _count: {
           select: {
             orders: true,
@@ -133,7 +186,7 @@ export class EmployeesService {
     };
   }
 
-  async create(createEmployeeDto: CreateEmployeeDto) {
+  async create(createEmployeeDto: CreateEmployeeDto, userId: string) {
     return this.prisma.employee.create({
       data: {
         firstName: createEmployeeDto.firstName,
@@ -141,11 +194,23 @@ export class EmployeesService {
         birthDate: new Date(createEmployeeDto.birthDate),
         photoPath: createEmployeeDto.photoPath,
         notes: createEmployeeDto.notes,
+
+        createdBy: {
+          connect: { id: userId },
+        },
+
+        updatedBy: {
+          connect: { id: userId },
+        },
       },
     });
   }
 
-  async update(id: number, updateEmployeeDto: UpdateEmployeeDto) {
+  async update(
+    id: number,
+    updateEmployeeDto: UpdateEmployeeDto,
+    userId: string,
+  ) {
     const employee = await this.prisma.employee.findUnique({
       where: { id },
     });
@@ -164,6 +229,10 @@ export class EmployeesService {
           : undefined,
         photoPath: updateEmployeeDto.photoPath,
         notes: updateEmployeeDto.notes,
+
+        updatedBy: {
+          connect: { id: userId },
+        },
       },
     });
   }

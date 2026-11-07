@@ -1,0 +1,32 @@
+image: node:22-bookworm-slim
+
+stages:
+  - build
+  - migrate
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - when: never
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - .npm/
+
+build_backend:
+  stage: build
+  script:
+    - npm ci --cache .npm --prefer-offline
+    - npx prisma generate
+    - npm run build
+
+migrate_production:
+  stage: migrate
+  needs:
+    - build_backend
+  script:
+    - npm ci --cache .npm --prefer-offline
+    - npx prisma migrate deploy

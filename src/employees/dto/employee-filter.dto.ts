@@ -43,4 +43,12 @@ export class EmployeeFilterDto extends PaginationDto {
   @IsOptional()
   @IsEnum(OrderStatus)
   orderStatus?: OrderStatus;
+
+  @IsOptional()
+  @IsString()
+  createdBy?: string;
+
+  @IsOptional()
+  @IsString()
+  updatedBy?: string;
 }
