@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from 'src/generated/prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,9 +24,7 @@ export class OrdersService {
     private readonly redis: RedisService,
   ) {}
 
-  // =========================================================
   // FIND ALL
-  // =========================================================
 
   async findAll(params: FindOrdersDto) {
     const start = performance.now();
@@ -428,9 +430,7 @@ export class OrdersService {
     return response;
   }
 
-  // =========================================================
   // FIND ONE
-  // =========================================================
 
   async findOneById(id: number) {
     const cacheKey = `order:${id}`;
@@ -534,9 +534,7 @@ export class OrdersService {
     return response;
   }
 
-  // =========================================================
   // CREATE
-  // =========================================================
 
   async create(dto: CreateOrderDto, userId: string) {
     const {
@@ -550,75 +548,204 @@ export class OrdersService {
       orderDetails,
     } = dto;
 
-    const order = await this.prisma.$transaction(async (tx) => {
-      // Existing customer খোঁজা — phone number exact match
-      let customer = await tx.customer.findFirst({
-        where: {
-          phoneNumber: customerPhone,
-        },
-      });
+    console.log('[ORDER CREATE] Started:', {
+      userId,
+      productCount: orderDetails.length,
+      products: orderDetails.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+      })),
+    });
 
-      // Customer না থাকলে নতুন customer তৈরি
-      if (!customer) {
-        customer = await tx.customer.create({
-          data: {
-            firstName: customerFirstName,
-            lastName: customerLastName ?? null,
+    const order = await this.prisma.$transaction(async (tx) => {
+      try {
+        // 1. Find or create customer
+        let customer = await tx.customer.findFirst({
+          where: {
             phoneNumber: customerPhone,
-            address: customerAddress ?? null,
+          },
+        });
+
+        if (!customer) {
+          customer = await tx.customer.create({
+            data: {
+              firstName: customerFirstName,
+              lastName: customerLastName ?? null,
+              phoneNumber: customerPhone,
+              address: customerAddress ?? null,
+              createdBy: {
+                connect: { id: userId },
+              },
+            },
+          });
+
+          console.log('[ORDER CREATE] Customer created:', {
+            customerId: customer.id,
+          });
+        } else {
+          console.log('[ORDER CREATE] Existing customer found:', {
+            customerId: customer.id,
+          });
+        }
+
+        // 2. Aggregate quantities by product ID
+        // Handles duplicate product IDs in orderDetails.
+        const stockRequirements = new Map<number, number>();
+
+        for (const item of orderDetails) {
+          const currentQuantity = stockRequirements.get(item.productId) ?? 0;
+
+          stockRequirements.set(
+            item.productId,
+            currentQuantity + item.quantity,
+          );
+        }
+
+        // 3. Atomically decrease stock
+
+        const sortedStockRequirements = [...stockRequirements.entries()].sort(
+          ([a], [b]) => a - b,
+        );
+        for (const [productId, requestedQuantity] of sortedStockRequirements) {
+          console.log('[STOCK CREATE] Attempting stock deduction:', {
+            productId,
+            requestedQuantity,
+          });
+
+          const result = await tx.product.updateMany({
+            where: {
+              id: productId,
+              unitsInStock: {
+                gte: requestedQuantity,
+              },
+            },
+            data: {
+              unitsInStock: {
+                decrement: requestedQuantity,
+              },
+            },
+          });
+
+          if (result.count !== 1) {
+            const product = await tx.product.findUnique({
+              where: { id: productId },
+              select: {
+                id: true,
+                productName: true,
+                unitsInStock: true,
+              },
+            });
+
+            console.error('[STOCK CREATE] Stock deduction failed:', {
+              productId,
+              requestedQuantity,
+              product,
+              reason: !product
+                ? 'PRODUCT_NOT_FOUND'
+                : product.unitsInStock === null
+                  ? 'STOCK_IS_NULL'
+                  : 'INSUFFICIENT_STOCK',
+            });
+
+            if (!product) {
+              throw new BadRequestException(
+                `Product ID ${productId} not found.`,
+              );
+            }
+
+            if (product.unitsInStock === null) {
+              throw new BadRequestException(
+                `${product.productName}: Stock information is unavailable.`,
+              );
+            }
+
+            throw new BadRequestException(
+              `${product.productName}: Insufficient stock. Available: ${product.unitsInStock}, Requested: ${requestedQuantity}.`,
+            );
+          }
+
+          const updatedProduct = await tx.product.findUnique({
+            where: { id: productId },
+            select: {
+              id: true,
+              productName: true,
+              unitsInStock: true,
+            },
+          });
+
+          console.log('[STOCK CREATE] Stock deduction successful:', {
+            productId,
+            requestedQuantity,
+            updatedProduct,
+          });
+        }
+
+        // 4. Create order
+        const createdOrder = await tx.orders.create({
+          data: {
+            orderDate: orderDate ?? new Date(),
+            orderStatus: orderStatus ?? 'PENDING',
+
             createdBy: {
               connect: { id: userId },
             },
-          },
-        });
-      }
 
-      return tx.orders.create({
-        data: {
-          orderDate: orderDate ?? new Date(),
-          orderStatus: orderStatus ?? 'PENDING',
+            customer: {
+              connect: { id: customer.id },
+            },
 
-          createdBy: {
-            connect: { id: userId },
-          },
+            employee: employeeId ? { connect: { id: employeeId } } : undefined,
 
-          customer: {
-            connect: { id: customer.id },
-          },
-
-          employee: employeeId ? { connect: { id: employeeId } } : undefined,
-
-          orderDetails: {
-            create: orderDetails.map((item) => ({
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              discount: item.discount ?? 0,
-              product: {
-                connect: { id: item.productId },
-              },
-            })),
-          },
-        },
-        include: {
-          customer: true,
-          employee: true,
-          orderDetails: {
-            include: {
-              product: {
-                select: { productName: true },
-              },
+            orderDetails: {
+              create: orderDetails.map((item) => ({
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                discount: item.discount ?? 0,
+                product: {
+                  connect: { id: item.productId },
+                },
+              })),
             },
           },
-          createdBy: {
-            select: { name: true },
+
+          include: {
+            customer: true,
+            employee: true,
+            orderDetails: {
+              include: {
+                product: {
+                  select: {
+                    productName: true,
+                  },
+                },
+              },
+            },
+            createdBy: {
+              select: { name: true },
+            },
+            updatedBy: {
+              select: { name: true },
+            },
           },
-          updatedBy: {
-            select: { name: true },
-          },
-        },
-      });
+        });
+
+        console.log('[ORDER CREATE] Order created inside transaction:', {
+          orderId: createdOrder.id,
+          orderDetailsCount: createdOrder.orderDetails.length,
+        });
+
+        return createdOrder;
+      } catch (error) {
+        console.error('[ORDER CREATE] Transaction failed:', {
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        throw error;
+      }
     });
 
+    // 5. Calculate total amount
     const totalAmount = order.orderDetails.reduce(
       (sum, item) =>
         sum +
@@ -628,7 +755,13 @@ export class OrdersService {
       0,
     );
 
+    // 6. Invalidate order list cache
     await this.redis.deleteByPattern('orders:list:*');
+
+    console.log('[ORDER CREATE] Completed successfully:', {
+      orderId: order.id,
+      totalAmount: Number(totalAmount.toFixed(2)),
+    });
 
     return {
       ...order,
@@ -644,6 +777,7 @@ export class OrdersService {
     };
   }
 
+  // UPDATE
   async update(id: number, dto: UpdateOrderDto, userId: string) {
     const {
       customerFirstName,
@@ -656,118 +790,342 @@ export class OrdersService {
       orderDetails,
     } = dto;
 
+    console.log('[ORDER UPDATE] Started:', {
+      orderId: id,
+      userId,
+      orderDetailsProvided: orderDetails !== undefined,
+      newProducts: orderDetails?.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+      })),
+    });
+
     const updatedOrder = await this.prisma.$transaction(async (tx) => {
-      const existingOrder = await tx.orders.findUniqueOrThrow({
-        where: { id },
-        include: { customer: true },
-      });
-
-      let customerUpdate: { connect: { id: number } } | undefined;
-
-      if (customerPhone !== undefined) {
-        // Phone match == existing customer
-        let customer = await tx.customer.findFirst({
-          where: {
-            phoneNumber: customerPhone,
+      try {
+        // 1. Find existing order
+        const existingOrder = await tx.orders.findUniqueOrThrow({
+          where: { id },
+          include: {
+            customer: true,
+            orderDetails: {
+              select: {
+                productId: true,
+                quantity: true,
+              },
+            },
           },
         });
 
-        if (!customer) {
-          // new customer
-          if (!customerFirstName?.trim()) {
-            throw new Error(
-              'Customer first name is required for a new phone number.',
+        console.log('[ORDER UPDATE] Existing order found:', {
+          orderId: id,
+          oldProducts: existingOrder.orderDetails,
+        });
+
+        let customerUpdate: { connect: { id: number } } | undefined;
+
+        // 2. Customer update logic
+        if (customerPhone !== undefined) {
+          let customer = await tx.customer.findFirst({
+            where: {
+              phoneNumber: customerPhone,
+            },
+          });
+
+          if (!customer) {
+            if (!customerFirstName?.trim()) {
+              throw new BadRequestException(
+                'Customer first name is required for a new phone number.',
+              );
+            }
+
+            customer = await tx.customer.create({
+              data: {
+                firstName: customerFirstName,
+                lastName: customerLastName ?? null,
+                phoneNumber: customerPhone,
+                address: customerAddress ?? null,
+                createdBy: {
+                  connect: { id: userId },
+                },
+              },
+            });
+
+            console.log('[ORDER UPDATE] New customer created:', {
+              customerId: customer.id,
+            });
+          }
+
+          customerUpdate = {
+            connect: { id: customer.id },
+          };
+        } else if (
+          customerFirstName !== undefined ||
+          customerLastName !== undefined ||
+          customerAddress !== undefined
+        ) {
+          if (existingOrder.customerId !== null) {
+            await tx.customer.update({
+              where: {
+                id: existingOrder.customerId,
+              },
+              data: {
+                ...(customerFirstName !== undefined
+                  ? { firstName: customerFirstName }
+                  : {}),
+                ...(customerLastName !== undefined
+                  ? { lastName: customerLastName }
+                  : {}),
+                ...(customerAddress !== undefined
+                  ? { address: customerAddress }
+                  : {}),
+                updatedById: userId,
+              },
+            });
+
+            console.log('[ORDER UPDATE] Customer information updated:', {
+              customerId: existingOrder.customerId,
+            });
+          }
+        }
+
+        // 3. Adjust stock only when orderDetails is provided
+        if (orderDetails !== undefined) {
+          // Aggregate old quantities by product ID
+          const oldStockMap = new Map<number, number>();
+
+          for (const item of existingOrder.orderDetails) {
+            oldStockMap.set(
+              item.productId,
+              (oldStockMap.get(item.productId) ?? 0) + item.quantity,
             );
           }
 
-          customer = await tx.customer.create({
-            data: {
-              firstName: customerFirstName,
-              lastName: customerLastName ?? null,
-              phoneNumber: customerPhone,
-              address: customerAddress ?? null,
-              createdBy: {
-                connect: { id: userId },
-              },
-            },
+          // Aggregate new quantities by product ID
+          const newStockMap = new Map<number, number>();
+
+          for (const item of orderDetails) {
+            newStockMap.set(
+              item.productId,
+              (newStockMap.get(item.productId) ?? 0) + item.quantity,
+            );
+          }
+
+          // Get all affected product IDs
+          const productIds = new Set([
+            ...oldStockMap.keys(),
+            ...newStockMap.keys(),
+          ]);
+
+          console.log('[STOCK UPDATE] Stock comparison:', {
+            orderId: id,
+            oldStock: Object.fromEntries(oldStockMap),
+            newStock: Object.fromEntries(newStockMap),
           });
-        }
 
-        customerUpdate = {
-          connect: { id: customer.id },
-        };
-      } else if (
-        customerFirstName !== undefined ||
-        customerLastName !== undefined ||
-        customerAddress !== undefined
-      ) {
-        // existing customer information update
-        if (existingOrder.customerId !== null) {
-          await tx.customer.update({
-            where: { id: existingOrder.customerId },
-            data: {
-              ...(customerFirstName !== undefined
-                ? { firstName: customerFirstName }
-                : {}),
-              ...(customerLastName !== undefined
-                ? { lastName: customerLastName }
-                : {}),
-              ...(customerAddress !== undefined
-                ? { address: customerAddress }
-                : {}),
-              updatedById: userId,
-            },
-          });
-        }
-      }
+          // Apply net stock changes
+          const sortedProductIds = [...productIds].sort((a, b) => a - b);
 
-      return tx.orders.update({
-        where: { id },
-        data: {
-          orderDate: orderDate ?? undefined,
-          orderStatus: orderStatus ?? undefined,
-          customer: customerUpdate,
+          for (const productId of sortedProductIds) {
+            const oldQuantity = oldStockMap.get(productId) ?? 0;
+            const newQuantity = newStockMap.get(productId) ?? 0;
 
-          employee: employeeId ? { connect: { id: employeeId } } : undefined,
+            // Positive = restore stock
+            // Negative = deduct additional stock
+            const stockDifference = oldQuantity - newQuantity;
 
-          updatedBy: {
-            connect: { id: userId },
-          },
+            if (stockDifference === 0) {
+              console.log('[STOCK UPDATE] No stock change required:', {
+                productId,
+                oldQuantity,
+                newQuantity,
+              });
 
-          orderDetails: orderDetails
-            ? {
-                deleteMany: {},
-                create: orderDetails.map((item) => ({
-                  quantity: item.quantity,
-                  unitPrice: item.unitPrice,
-                  discount: item.discount ?? 0,
-                  product: {
-                    connect: { id: item.productId },
+              continue;
+            }
+
+            console.log('[STOCK UPDATE] Applying stock adjustment:', {
+              productId,
+              oldQuantity,
+              newQuantity,
+              stockDifference,
+              action: stockDifference > 0 ? 'RESTORE' : 'DEDUCT',
+            });
+
+            let result;
+
+            if (stockDifference > 0) {
+              // Restore stock
+              result = await tx.product.updateMany({
+                where: {
+                  id: productId,
+                  unitsInStock: {
+                    not: null,
                   },
-                })),
+                },
+                data: {
+                  unitsInStock: {
+                    increment: stockDifference,
+                  },
+                },
+              });
+            } else {
+              // Deduct additional stock atomically
+              const requestedQuantity = Math.abs(stockDifference);
+
+              result = await tx.product.updateMany({
+                where: {
+                  id: productId,
+                  unitsInStock: {
+                    gte: requestedQuantity,
+                  },
+                },
+                data: {
+                  unitsInStock: {
+                    decrement: requestedQuantity,
+                  },
+                },
+              });
+            }
+
+            console.log('[STOCK UPDATE] Database update result:', {
+              productId,
+              result,
+            });
+
+            if (result.count !== 1) {
+              const product = await tx.product.findUnique({
+                where: { id: productId },
+                select: {
+                  id: true,
+                  productName: true,
+                  unitsInStock: true,
+                },
+              });
+
+              console.error('[STOCK UPDATE] Stock adjustment failed:', {
+                orderId: id,
+                productId,
+                oldQuantity,
+                newQuantity,
+                stockDifference,
+                product,
+                reason: !product
+                  ? 'PRODUCT_NOT_FOUND'
+                  : product.unitsInStock === null
+                    ? 'STOCK_IS_NULL'
+                    : 'INSUFFICIENT_STOCK',
+              });
+
+              if (!product) {
+                throw new BadRequestException(
+                  `Product ID ${productId} not found.`,
+                );
               }
-            : undefined,
-        },
-        include: {
-          customer: true,
-          employee: true,
-          orderDetails: {
-            include: {
-              product: {
-                select: { productName: true },
+
+              if (product.unitsInStock === null) {
+                throw new BadRequestException(
+                  `${product.productName}: Stock information is unavailable.`,
+                );
+              }
+
+              throw new BadRequestException(
+                `${product.productName}: Insufficient stock. Available: ${product.unitsInStock}, Additional required: ${Math.abs(stockDifference)}.`,
+              );
+            }
+
+            const updatedProduct = await tx.product.findUnique({
+              where: { id: productId },
+              select: {
+                id: true,
+                productName: true,
+                unitsInStock: true,
+              },
+            });
+
+            console.log('[STOCK UPDATE] Stock adjustment successful:', {
+              productId,
+              oldQuantity,
+              newQuantity,
+              updatedProduct,
+            });
+          }
+        } else {
+          console.log(
+            '[STOCK UPDATE] Skipped: orderDetails was not provided.',
+            { orderId: id },
+          );
+        }
+
+        // 4. Update order
+        const result = await tx.orders.update({
+          where: { id },
+          data: {
+            orderDate: orderDate ?? undefined,
+            orderStatus: orderStatus ?? undefined,
+
+            customer: customerUpdate,
+
+            employee: employeeId ? { connect: { id: employeeId } } : undefined,
+
+            updatedBy: {
+              connect: { id: userId },
+            },
+
+            orderDetails:
+              orderDetails !== undefined
+                ? {
+                    deleteMany: {},
+                    create: orderDetails.map((item) => ({
+                      quantity: item.quantity,
+                      unitPrice: item.unitPrice,
+                      discount: item.discount ?? 0,
+                      product: {
+                        connect: { id: item.productId },
+                      },
+                    })),
+                  }
+                : undefined,
+          },
+
+          include: {
+            customer: true,
+            employee: true,
+            orderDetails: {
+              include: {
+                product: {
+                  select: {
+                    productName: true,
+                  },
+                },
               },
             },
+            createdBy: {
+              select: { name: true },
+            },
+            updatedBy: {
+              select: { name: true },
+            },
           },
-          createdBy: {
-            select: { name: true },
-          },
-          updatedBy: {
-            select: { name: true },
-          },
-        },
-      });
+        });
+
+        console.log('[ORDER UPDATE] Order updated inside transaction:', {
+          orderId: result.id,
+          orderDetailsCount: result.orderDetails.length,
+        });
+
+        return result;
+      } catch (error) {
+        console.error('[ORDER UPDATE] Transaction failed:', {
+          orderId: id,
+          userId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        throw error;
+      }
     });
 
+    // 5. Calculate total amount
     const totalAmount = updatedOrder.orderDetails.reduce(
       (sum, item) =>
         sum +
@@ -777,10 +1135,16 @@ export class OrdersService {
       0,
     );
 
+    // 6. Invalidate Redis cache
     await Promise.all([
       this.redis.del(`order:${id}`),
       this.redis.deleteByPattern('orders:list:*'),
     ]);
+
+    console.log('[ORDER UPDATE] Completed successfully:', {
+      orderId: id,
+      totalAmount: Number(totalAmount.toFixed(2)),
+    });
 
     return {
       ...updatedOrder,
@@ -795,6 +1159,7 @@ export class OrdersService {
       })),
     };
   }
+
   async remove(id: number) {
     console.log('========================================');
     console.log('DELETE ORDER START');
