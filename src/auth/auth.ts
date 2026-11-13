@@ -1,10 +1,11 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { admin as adminPlugin } from 'better-auth/plugins';
-import { createAdminRoleProtection } from './admin-role-protection';
-import { sendResetEmail } from './email';
 
+import { createAdminRoleProtection } from './admin-role-protection';
+import { MailService } from '../mail/mail.service';
 import { PrismaClient } from '../generated/prisma/client';
+
 import {
   ac,
   superAdmin,
@@ -23,7 +24,7 @@ function getTrustedOrigins(): string[] {
     .filter(Boolean);
 }
 
-export function createAuth(prisma: PrismaClient) {
+export function createAuth(prisma: PrismaClient, mailService: MailService) {
   const secret = process.env.BETTER_AUTH_SECRET;
 
   if (!secret) {
@@ -49,6 +50,14 @@ export function createAuth(prisma: PrismaClient) {
       provider: 'postgresql',
     }),
 
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 60,
+        strategy: 'compact',
+      },
+    },
+
     emailAndPassword: {
       enabled: true,
       resetPasswordTokenExpiresIn: 30 * 60,
@@ -56,7 +65,7 @@ export function createAuth(prisma: PrismaClient) {
       revokeSessionsOnPasswordReset: true,
 
       sendResetPassword: async ({ user, url }) => {
-        await sendResetEmail({
+        await mailService.sendResetPasswordEmail({
           email: user.email,
           name: user.name,
           url,
