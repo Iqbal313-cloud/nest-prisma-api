@@ -5,7 +5,6 @@ import { admin as adminPlugin } from 'better-auth/plugins';
 import { createAdminRoleProtection } from './admin-role-protection';
 import { MailService } from '../mail/mail.service';
 import { PrismaClient } from '../generated/prisma/client';
-
 import {
   ac,
   superAdmin,
@@ -43,6 +42,44 @@ export function createAuth(prisma: PrismaClient, mailService: MailService) {
         sameSite: 'none',
         secure: true,
         httpOnly: true,
+      },
+    },
+
+    databaseHooks: {
+      session: {
+        create: {
+          after: async (session) => {
+            // Get all active sessions, newest first
+            const activeSessions = await prisma.session.findMany({
+              where: {
+                userId: session.userId,
+                expiresAt: {
+                  gt: new Date(),
+                },
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+              select: {
+                id: true,
+              },
+            });
+
+            // Keep the newest 3 sessions
+            const sessionsToRevoke = activeSessions.slice(3);
+
+            // Revoke older sessions
+            if (sessionsToRevoke.length > 0) {
+              await prisma.session.deleteMany({
+                where: {
+                  id: {
+                    in: sessionsToRevoke.map((s) => s.id),
+                  },
+                },
+              });
+            }
+          },
+        },
       },
     },
 

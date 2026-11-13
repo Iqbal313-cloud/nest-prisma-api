@@ -20,13 +20,13 @@ export class MailService implements OnModuleInit {
     try {
       await this.transporter.verify();
 
-      this.logger.log('Yahoo SMTP connection successful');
+      this.logger.log('SMTP connection successful');
 
       // Temporary test email
       // await this.testEmail();
     } catch (error) {
       this.logger.error(
-        'Yahoo SMTP initialization failed',
+        'SMTP initialization failed',
         error instanceof Error ? error.stack : String(error),
       );
     }
